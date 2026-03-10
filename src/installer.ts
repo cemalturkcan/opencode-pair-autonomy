@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { parse } from "jsonc-parser";
 import { spawn } from "node:child_process";
-import { createInterface } from "node:readline/promises";
+import { createInterface } from "node:readline";
 import { SAMPLE_PROJECT_CONFIG } from "./config";
 
 type JsonRecord = Record<string, unknown>;
@@ -16,6 +16,15 @@ const STATIC_PLUGIN_FILENAMES = [
   "opencode-notificator.js",
   "md-table-formatter.js",
   "opencode-pty.js",
+] as const;
+
+const MANAGED_PACKAGE_NAMES = [
+  "opencode-pair-autonomy",
+  "opencode-pty",
+  "opencode-notificator",
+  "@zenobius/opencode-skillful",
+  "@tarquinen/opencode-dcp",
+  "@franlol/opencode-md-table-formatter",
 ] as const;
 
 const PACKAGE_SPECS: Record<string, string> = {
@@ -239,6 +248,24 @@ function mergeInstructionsList(existing: unknown, shellStrategyDir: string): str
   return [shellInstruction, ...retained];
 }
 
+function removeHarnessPluginList(existing: unknown, vendorDir: string, pluginsDir: string): string[] | undefined {
+  const managedEntries = new Set([
+    ...STATIC_PLUGIN_FILENAMES.map((file) => `file://${join(pluginsDir, file)}`),
+    `file://${vendorDir}`,
+    "opencode-pair-autonomy",
+    "@tarquinen/opencode-dcp",
+  ]);
+  const current = Array.isArray(existing) ? existing.filter((item): item is string => typeof item === "string") : [];
+  const retained = current.filter((item) => !managedEntries.has(item));
+  return retained.length > 0 ? retained : undefined;
+}
+
+function removeHarnessInstructionsList(existing: unknown): string[] | undefined {
+  const current = Array.isArray(existing) ? existing.filter((item): item is string => typeof item === "string") : [];
+  const retained = current.filter((item) => !item.endsWith("/shell-strategy/shell_strategy.md"));
+  return retained.length > 0 ? retained : undefined;
+}
+
 function normalizePermissionAction(value: unknown): "allow" | "ask" | "deny" | undefined {
   if (typeof value !== "string") {
     return undefined;
@@ -406,6 +433,12 @@ function installPluginWrappers(pluginsDir: string, configDir: string): void {
   );
 }
 
+function removePluginWrappers(pluginsDir: string): void {
+  for (const filename of STATIC_PLUGIN_FILENAMES) {
+    rmSync(join(pluginsDir, filename), { force: true });
+  }
+}
+
 function copyDirectoryContents(
   sourceDir: string,
   targetDir: string,
@@ -493,7 +526,10 @@ async function promptForJinaApiKey(existing?: string): Promise<string | undefine
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
     const suffix = existing ? " (press Enter to reuse existing value)" : "";
-    const answer = await rl.question(`Enter Jina API key${suffix}: `);
+    const answer = await new Promise<string>((resolveQuestion, rejectQuestion) => {
+      rl.question(`Enter Jina API key${suffix}: `, (value) => resolveQuestion(value));
+      rl.once("error", rejectQuestion);
+    });
     const normalized = normalizeJinaApiKey(answer);
     return normalized ?? existing;
   } finally {
@@ -549,6 +585,23 @@ function ensureTuiConfig(configDir: string): void {
 
 function ensureSkillsDir(skillsDir: string): void {
   ensureDir(skillsDir);
+}
+
+function removeDirectoryIfEmpty(dirPath: string): void {
+  if (!existsSync(dirPath)) {
+    return;
+  }
+
+  const stat = statSync(dirPath);
+  if (!stat.isDirectory()) {
+    return;
+  }
+
+  if (readdirSync(dirPath).length > 0) {
+    return;
+  }
+
+  rmSync(dirPath, { recursive: true, force: true });
 }
 
 async function runBunInstall(configDir: string): Promise<void> {
@@ -624,5 +677,73 @@ export async function installHarness(options?: { fresh?: boolean }): Promise<{ c
     configPath,
     packageJsonPath,
     harnessConfigPath: paths.harnessConfig,
+  };
+}
+
+export async function uninstallHarness(): Promise<{
+  configPath: string;
+  packageJsonPath: string;
+  preservedPaths: string[];
+}> {
+  const configDir = getConfigDir();
+  const paths = getConfigPaths(configDir);
+  const detected = detectMainConfigPath(paths);
+
+  if (existsSync(detected.path)) {
+    const config = readJsonLike(detected.path);
+    backupFile(detected.path);
+
+    const nextPlugin = removeHarnessPluginList(config.plugin, paths.vendorDir, paths.pluginsDir);
+    if (nextPlugin) {
+      config.plugin = nextPlugin;
+    } else {
+      delete config.plugin;
+    }
+
+    const nextInstructions = removeHarnessInstructionsList(config.instructions);
+    if (nextInstructions) {
+      config.instructions = nextInstructions;
+    } else {
+      delete config.instructions;
+    }
+
+    writeJson(detected.path, config);
+  }
+
+  if (existsSync(paths.packageJson)) {
+    const pkg = readJsonLike(paths.packageJson);
+    const currentDependencies = (pkg.dependencies && typeof pkg.dependencies === "object" && !Array.isArray(pkg.dependencies))
+      ? { ...(pkg.dependencies as Record<string, string>) }
+      : undefined;
+
+    if (currentDependencies) {
+      backupFile(paths.packageJson);
+      for (const packageName of MANAGED_PACKAGE_NAMES) {
+        delete currentDependencies[packageName];
+      }
+
+      if (Object.keys(currentDependencies).length > 0) {
+        pkg.dependencies = currentDependencies;
+      } else {
+        delete pkg.dependencies;
+      }
+
+      writeJson(paths.packageJson, pkg);
+      await runBunInstall(configDir);
+    }
+  }
+
+  removePluginWrappers(paths.pluginsDir);
+  rmSync(paths.vendorDir, { recursive: true, force: true });
+  rmSync(join(paths.shellStrategyDir, "shell_strategy.md"), { force: true });
+
+  removeDirectoryIfEmpty(paths.pluginsDir);
+  removeDirectoryIfEmpty(paths.shellStrategyDir);
+  removeDirectoryIfEmpty(join(configDir, "plugin"));
+
+  return {
+    configPath: detected.path,
+    packageJsonPath: paths.packageJson,
+    preservedPaths: [paths.harnessConfig, paths.vendorMcpDir, paths.skillsDir],
   };
 }
