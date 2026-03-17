@@ -9,58 +9,76 @@ import { deepMerge } from "./utils";
 const HarnessConfigSchema = z.object({
   default_mode: z.enum(["pair", "pair-plan", "autonomous"]).optional(),
   set_default_agent: z.boolean().optional(),
-  commands: z.object({
-    enabled: z.boolean().optional(),
-  }).optional(),
-  credentials: z.object({
-    jina_api_key: z.string().optional(),
-  }).optional(),
-  hooks: z.object({
-    profile: z.enum(["minimal", "standard", "strict"]).optional(),
-    intent_gate: z.boolean().optional(),
-    todo_continuation: z.boolean().optional(),
-    comment_guard: z.boolean().optional(),
-    session_start: z.boolean().optional(),
-    pre_tool_use: z.boolean().optional(),
-    post_tool_use: z.boolean().optional(),
-    pre_compact: z.boolean().optional(),
-    stop: z.boolean().optional(),
-    session_end: z.boolean().optional(),
-    file_edited: z.boolean().optional(),
-    flush_queued_prompts: z.boolean().optional(),
-    todo_continuation_cooldown_ms: z.number().int().positive().optional(),
-  }).optional(),
-  memory: z.object({
-    enabled: z.boolean().optional(),
-    directory: z.string().optional(),
-    lookback_days: z.number().int().positive().optional(),
-    max_injected_chars: z.number().int().positive().optional(),
-  }).optional(),
-  learning: z.object({
-    enabled: z.boolean().optional(),
-    directory: z.string().optional(),
-    min_observations: z.number().int().positive().optional(),
-    auto_promote: z.boolean().optional(),
-    max_patterns: z.number().int().positive().optional(),
-    max_injected_patterns: z.number().int().positive().optional(),
-  }).optional(),
-  mcps: z.object({
-    context7: z.boolean().optional(),
-    grep_app: z.boolean().optional(),
-    websearch: z.boolean().optional(),
-    fff: z.boolean().optional(),
-    chrome_devtools: z.boolean().optional(),
-    pg_mcp: z.boolean().optional(),
-    ssh_mcp: z.boolean().optional(),
-    sudo_mcp: z.boolean().optional(),
-    jina: z.boolean().optional(),
-  }).optional(),
-  agents: z.record(z.string(), z.object({
-    model: z.string().optional(),
-    variant: z.string().optional(),
-    description: z.string().optional(),
-    prompt_append: z.string().optional(),
-  })).optional(),
+  commands: z
+    .object({
+      enabled: z.boolean().optional(),
+    })
+    .optional(),
+  credentials: z
+    .object({
+      jina_api_key: z.string().optional(),
+    })
+    .optional(),
+  hooks: z
+    .object({
+      profile: z.enum(["minimal", "standard", "strict"]).optional(),
+      intent_gate: z.boolean().optional(),
+      todo_continuation: z.boolean().optional(),
+      comment_guard: z.boolean().optional(),
+      session_start: z.boolean().optional(),
+      pre_tool_use: z.boolean().optional(),
+      post_tool_use: z.boolean().optional(),
+      pre_compact: z.boolean().optional(),
+      stop: z.boolean().optional(),
+      session_end: z.boolean().optional(),
+      file_edited: z.boolean().optional(),
+      flush_queued_prompts: z.boolean().optional(),
+      prompt_refiner: z.boolean().optional(),
+      todo_continuation_cooldown_ms: z.number().int().positive().optional(),
+    })
+    .optional(),
+  memory: z
+    .object({
+      enabled: z.boolean().optional(),
+      directory: z.string().optional(),
+      lookback_days: z.number().int().positive().optional(),
+      max_injected_chars: z.number().int().positive().optional(),
+    })
+    .optional(),
+  learning: z
+    .object({
+      enabled: z.boolean().optional(),
+      directory: z.string().optional(),
+      min_observations: z.number().int().positive().optional(),
+      auto_promote: z.boolean().optional(),
+      max_patterns: z.number().int().positive().optional(),
+      max_injected_patterns: z.number().int().positive().optional(),
+    })
+    .optional(),
+  mcps: z
+    .object({
+      context7: z.boolean().optional(),
+      grep_app: z.boolean().optional(),
+      websearch: z.boolean().optional(),
+      fff: z.boolean().optional(),
+      chrome_devtools: z.boolean().optional(),
+      pg_mcp: z.boolean().optional(),
+      ssh_mcp: z.boolean().optional(),
+      sudo_mcp: z.boolean().optional(),
+      jina: z.boolean().optional(),
+    })
+    .optional(),
+  agents: z
+    .record(
+      z.string(),
+      z.object({
+        model: z.string().optional(),
+        variant: z.string().optional(),
+        description: z.string().optional(),
+        prompt_append: z.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 const DEFAULTS: HarnessConfig = {
@@ -72,7 +90,7 @@ const DEFAULTS: HarnessConfig = {
   hooks: {
     profile: "standard",
     intent_gate: false,
-    todo_continuation: true,
+    todo_continuation: false,
     comment_guard: true,
     session_start: true,
     pre_tool_use: true,
@@ -81,7 +99,8 @@ const DEFAULTS: HarnessConfig = {
     stop: true,
     session_end: true,
     file_edited: true,
-    flush_queued_prompts: true,
+    flush_queued_prompts: false,
+    prompt_refiner: false,
     todo_continuation_cooldown_ms: 30000,
   },
   memory: {
@@ -104,7 +123,7 @@ const DEFAULTS: HarnessConfig = {
     chrome_devtools: true,
     pg_mcp: true,
     ssh_mcp: true,
-    sudo_mcp: true,
+    sudo_mcp: false,
     jina: true,
   },
   agents: {},
@@ -127,14 +146,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function formatParseErrors(errors: ParseError[]): string {
-  return errors.map((error) => `offset ${error.offset}: code ${error.error}`).join(", ");
+  return errors
+    .map((error) => `offset ${error.offset}: code ${error.error}`)
+    .join(", ");
 }
 
 function logConfigWarning(filePath: string, message: string): void {
   console.warn(`[opencode-pair-autonomy] ${message} (${filePath})`);
 }
 
-function parseConfigPartially(parsed: unknown, filePath: string): HarnessConfig {
+function parseConfigPartially(
+  parsed: unknown,
+  filePath: string,
+): HarnessConfig {
   if (!isRecord(parsed)) {
     logConfigWarning(filePath, "Ignoring config because it is not an object");
     return {};
@@ -143,7 +167,9 @@ function parseConfigPartially(parsed: unknown, filePath: string): HarnessConfig 
   const partial: Partial<HarnessConfig> = {};
   const invalidSections: string[] = [];
 
-  for (const [key, schema] of Object.entries(ConfigSectionSchemas) as Array<[keyof HarnessConfig, z.ZodTypeAny]>) {
+  for (const [key, schema] of Object.entries(ConfigSectionSchemas) as Array<
+    [keyof HarnessConfig, z.ZodTypeAny]
+  >) {
     if (!(key in parsed)) {
       continue;
     }
@@ -154,7 +180,9 @@ function parseConfigPartially(parsed: unknown, filePath: string): HarnessConfig 
       continue;
     }
 
-    invalidSections.push(`${key}: ${result.error.issues.map((issue) => issue.message).join("; ")}`);
+    invalidSections.push(
+      `${key}: ${result.error.issues.map((issue) => issue.message).join("; ")}`,
+    );
   }
 
   if (invalidSections.length > 0) {
@@ -176,7 +204,10 @@ function readConfigFile(filePath: string): HarnessConfig {
   const errors: ParseError[] = [];
   const parsed = parse(raw, errors);
   if (errors.length > 0) {
-    logConfigWarning(filePath, `Ignoring unreadable JSONC config with parse errors: ${formatParseErrors(errors)}`);
+    logConfigWarning(
+      filePath,
+      `Ignoring unreadable JSONC config with parse errors: ${formatParseErrors(errors)}`,
+    );
     return {};
   }
 
@@ -189,8 +220,17 @@ function readConfigFile(filePath: string): HarnessConfig {
 }
 
 export function loadHarnessConfig(projectDirectory: string): HarnessConfig {
-  const userPath = join(homedir(), ".config", "opencode", "opencode-pair-autonomy.jsonc");
-  const projectPath = join(projectDirectory, ".opencode", "opencode-pair-autonomy.jsonc");
+  const userPath = join(
+    homedir(),
+    ".config",
+    "opencode",
+    "opencode-pair-autonomy.jsonc",
+  );
+  const projectPath = join(
+    projectDirectory,
+    ".opencode",
+    "opencode-pair-autonomy.jsonc",
+  );
 
   return deepMerge(
     deepMerge(DEFAULTS, readConfigFile(userPath)),
@@ -207,7 +247,7 @@ export const SAMPLE_PROJECT_CONFIG = `{
   "hooks": {
     "profile": "standard",
     "intent_gate": false,
-    "todo_continuation": true,
+    "todo_continuation": false,
     "comment_guard": true,
     "session_start": true,
     "pre_tool_use": true,
@@ -216,7 +256,8 @@ export const SAMPLE_PROJECT_CONFIG = `{
     "stop": true,
     "session_end": true,
     "file_edited": true,
-    "flush_queued_prompts": true,
+    "flush_queued_prompts": false,
+    "prompt_refiner": false,
     "todo_continuation_cooldown_ms": 30000
   },
   "memory": {
@@ -239,7 +280,7 @@ export const SAMPLE_PROJECT_CONFIG = `{
     "chrome_devtools": true,
     "pg_mcp": true,
     "ssh_mcp": true,
-    "sudo_mcp": true,
+    "sudo_mcp": false,
     "jina": true
   },
   "agents": {
