@@ -1,0 +1,28 @@
+{
+  "name": "web-agent-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Web-agent MCP server with a CloakBrowser-backed browser adapter.",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/server.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.4",
+    "cloakbrowser": "^0.3.16",
+    "playwright-core": "^1.52.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8"
+  }
+}

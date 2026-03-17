@@ -23,7 +23,9 @@ function binRoot(): string {
 }
 
 function ensureBearer(token: string): string {
-  return token.trim().toLowerCase().startsWith("bearer ") ? token.trim() : `Bearer ${token.trim()}`;
+  return token.trim().toLowerCase().startsWith("bearer ")
+    ? token.trim()
+    : `Bearer ${token.trim()}`;
 }
 
 function resolveVendorMcpPath(name: string): string {
@@ -40,7 +42,10 @@ function resolveMcpServerRoot(name: string): string {
 
 function readExistingJinaBearer(): string | undefined {
   const root = configRoot();
-  const candidates = [join(root, "opencode.json"), join(root, "opencode.jsonc")];
+  const candidates = [
+    join(root, "opencode.json"),
+    join(root, "opencode.jsonc"),
+  ];
 
   for (const filePath of candidates) {
     if (!existsSync(filePath)) {
@@ -61,8 +66,7 @@ function readExistingJinaBearer(): string | undefined {
       if (typeof bearer === "string" && bearer.trim()) {
         return bearer;
       }
-    } catch {
-    }
+    } catch {}
   }
 
   return undefined;
@@ -78,13 +82,16 @@ function commandExistsInPath(command: string): boolean {
     return false;
   }
 
-  const executableNames = process.platform === "win32"
-    ? [command, `${command}.exe`, `${command}.cmd`, `${command}.bat`]
-    : [command];
+  const executableNames =
+    process.platform === "win32"
+      ? [command, `${command}.exe`, `${command}.cmd`, `${command}.bat`]
+      : [command];
 
   return pathValue
     .split(process.platform === "win32" ? ";" : ":")
-    .some((directory) => executableNames.some((name) => existsSync(join(directory, name))));
+    .some((directory) =>
+      executableNames.some((name) => existsSync(join(directory, name))),
+    );
 }
 
 function resolveFffCommand(): string[] {
@@ -93,7 +100,10 @@ function resolveFffCommand(): string[] {
     return [configured];
   }
 
-  const bundled = join(binRoot(), process.platform === "win32" ? "fff-mcp.exe" : "fff-mcp");
+  const bundled = join(
+    binRoot(),
+    process.platform === "win32" ? "fff-mcp.exe" : "fff-mcp",
+  );
   if (existsSync(bundled)) {
     return [bundled];
   }
@@ -102,7 +112,9 @@ function resolveFffCommand(): string[] {
   return commandExistsInPath(fallback) ? [fallback] : [];
 }
 
-export function createHarnessMcps(config: HarnessConfig): Record<string, McpConfig> {
+export function createHarnessMcps(
+  config: HarnessConfig,
+): Record<string, McpConfig> {
   const toggles = config.mcps ?? {};
   const result: Record<string, McpConfig> = {};
   const root = configRoot();
@@ -137,7 +149,9 @@ export function createHarnessMcps(config: HarnessConfig): Record<string, McpConf
         ? `https://mcp.exa.ai/mcp?tools=web_search_exa&exaApiKey=${encodeURIComponent(process.env.EXA_API_KEY)}`
         : "https://mcp.exa.ai/mcp?tools=web_search_exa",
       enabled: true,
-      ...(process.env.EXA_API_KEY ? { headers: { "x-api-key": process.env.EXA_API_KEY } } : {}),
+      ...(process.env.EXA_API_KEY
+        ? { headers: { "x-api-key": process.env.EXA_API_KEY } }
+        : {}),
       oauth: false,
       timeout: 60000,
     };
@@ -146,19 +160,20 @@ export function createHarnessMcps(config: HarnessConfig): Record<string, McpConf
   if (toggles.fff !== false) {
     const command = resolveFffCommand();
     if (command.length > 0) {
-    result.fff = {
-      type: "local",
-      command,
-      enabled: true,
-      timeout: 60000,
-    };
+      result.fff = {
+        type: "local",
+        command,
+        enabled: true,
+        timeout: 60000,
+      };
     }
   }
 
-  if (toggles.chrome_devtools !== false) {
-    result["chrome-devtools"] = {
+  if (toggles.web_agent_mcp !== false) {
+    const serverRoot = resolveMcpServerRoot("web-agent-mcp");
+    result["web-agent-mcp"] = {
       type: "local",
-      command: ["npx", "-y", "chrome-devtools-mcp@latest"],
+      command: localCommand(join(serverRoot, "dist", "src", "server.js")),
       enabled: true,
       timeout: 60000,
     };
