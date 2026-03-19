@@ -12,10 +12,13 @@ import { safeCreateHook, safeHook } from "./sdk";
 import { createSessionEndHook } from "./session-end";
 import { createSessionStartHook } from "./session-start";
 import { createStopHook } from "./stop";
+import { createClaudeTokenSyncHook } from "./claude-token-sync";
 import { createTodoContinuationHook } from "./todo-continuation";
 
 type HookRecord = {
+  config?: (config: any) => Promise<void>;
   "chat.message"?: (input: any, output: any) => Promise<void>;
+  "chat.headers"?: (input: any, output: any) => Promise<void>;
   event?: (input: {
     event: { type: string; properties?: unknown };
   }) => Promise<void>;
@@ -42,7 +45,9 @@ function wrapHookRecord(
   }
 
   return {
+    config: safeHook(`${name}.config`, hook.config),
     "chat.message": safeHook(`${name}.chat.message`, hook["chat.message"]),
+    "chat.headers": safeHook(`${name}.chat.headers`, hook["chat.headers"]),
     event: safeHook(`${name}.event`, hook.event),
     "tool.execute.before": safeHook(
       `${name}.tool.execute.before`,
@@ -79,6 +84,32 @@ function wrapHookRecord(
 
 function composeChatMessage(hooks: HookRecord[]) {
   const active = hooks.map((hook) => hook["chat.message"]).filter(Boolean);
+  if (active.length === 0) {
+    return undefined;
+  }
+
+  return async (input: any, output: any) => {
+    for (const hook of active) {
+      await hook?.(input, output);
+    }
+  };
+}
+
+function composeConfig(hooks: HookRecord[]) {
+  const active = hooks.map((hook) => hook.config).filter(Boolean);
+  if (active.length === 0) {
+    return undefined;
+  }
+
+  return async (config: any) => {
+    for (const hook of active) {
+      await hook?.(config);
+    }
+  };
+}
+
+function composeChatHeaders(hooks: HookRecord[]) {
+  const active = hooks.map((hook) => hook["chat.headers"]).filter(Boolean);
   if (active.length === 0) {
     return undefined;
   }
@@ -148,7 +179,10 @@ function composeSingleArg(hooks: HookRecord[], key: keyof HookRecord) {
   };
 }
 
-export function createHarnessHooks(ctx: PluginInput, config: HarnessConfig) {
+export async function createHarnessHooks(
+  ctx: PluginInput,
+  config: HarnessConfig,
+) {
   const hooks: HookRecord[] = [];
   const profile = resolveHookProfile(config);
   const runtime = createHookRuntime(ctx, config);
@@ -168,6 +202,16 @@ export function createHarnessHooks(ctx: PluginInput, config: HarnessConfig) {
     }
   };
 
+  if (config.hooks?.claude_token_sync !== false) {
+    const tokenSync = await createClaudeTokenSyncHook();
+    if (tokenSync) {
+      const hook = wrapHookRecord(
+        "claude_token_sync",
+        safeCreateHook("claude_token_sync", () => tokenSync),
+      );
+      if (hook) hooks.push(hook);
+    }
+  }
   registerHook("intent_gate", config.hooks?.intent_gate !== false, () =>
     createIntentGateHook(ctx),
   );
@@ -220,7 +264,9 @@ export function createHarnessHooks(ctx: PluginInput, config: HarnessConfig) {
   }
 
   return {
+    config: composeConfig(hooks),
     "chat.message": composeChatMessage(hooks),
+    "chat.headers": composeChatHeaders(hooks),
     event: composeEvent(hooks),
     "tool.execute.before": composeToolBefore(hooks),
     "tool.execute.after": composeToolAfter(hooks),

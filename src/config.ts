@@ -70,12 +70,6 @@ const HarnessConfigSchema = z.object({
       figma: z.boolean().optional(),
     })
     .optional(),
-  proxy: z
-    .object({
-      enabled: z.boolean().optional(),
-      port: z.number().int().positive().optional(),
-    })
-    .optional(),
   agents: z
     .record(
       z.string(),
@@ -135,10 +129,6 @@ const DEFAULTS: HarnessConfig = {
     jina: true,
     figma: true,
   },
-  proxy: {
-    enabled: true,
-    port: 3456,
-  },
   agents: {},
 };
 
@@ -151,7 +141,6 @@ const ConfigSectionSchemas = {
   memory: HarnessConfigSchema.shape.memory,
   learning: HarnessConfigSchema.shape.learning,
   mcps: HarnessConfigSchema.shape.mcps,
-  proxy: HarnessConfigSchema.shape.proxy,
   agents: HarnessConfigSchema.shape.agents,
 } satisfies Record<keyof HarnessConfig, z.ZodTypeAny>;
 
@@ -298,10 +287,6 @@ export const SAMPLE_PROJECT_CONFIG = `{
     "sudo_mcp": false,
     "jina": true,
     "figma": true
-  },
-  "proxy": {
-    "enabled": true,
-    "port": 3456
   },
   "agents": {
     "pair": {

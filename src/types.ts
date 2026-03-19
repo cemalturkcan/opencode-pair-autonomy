@@ -22,11 +22,6 @@ export type AgentOverride = {
   prompt_append?: string;
 };
 
-export type ProxyConfig = {
-  enabled?: boolean;
-  port?: number;
-};
-
 export type HarnessConfig = {
   default_mode?: HarnessMode;
   set_default_agent?: boolean;
@@ -37,7 +32,6 @@ export type HarnessConfig = {
     jina_api_key?: string;
     figma_api_key?: string;
   };
-  proxy?: ProxyConfig;
   hooks?: {
     profile?: HookProfile;
     intent_gate?: boolean;
@@ -53,6 +47,7 @@ export type HarnessConfig = {
     flush_queued_prompts?: boolean;
     todo_continuation_cooldown_ms?: number;
     prompt_refiner?: boolean;
+    claude_token_sync?: boolean;
   };
   memory?: {
     enabled?: boolean;

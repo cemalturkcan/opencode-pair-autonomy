@@ -7,7 +7,7 @@ import { createHarnessHooks } from "./hooks";
 
 const PairAutonomyPlugin: Plugin = async (ctx) => {
   const harnessConfig = loadHarnessConfig(ctx.directory);
-  const hooks = createHarnessHooks(ctx, harnessConfig);
+  const hooks = await createHarnessHooks(ctx, harnessConfig);
 
   return {
     config: async (config) => {
@@ -48,8 +48,11 @@ const PairAutonomyPlugin: Plugin = async (ctx) => {
               ? "pair-plan"
               : "pair";
       }
+
+      await hooks.config?.(config);
     },
     ...(hooks["chat.message"] ? { "chat.message": hooks["chat.message"] } : {}),
+    ...(hooks["chat.headers"] ? { "chat.headers": hooks["chat.headers"] } : {}),
     ...(hooks.event ? { event: hooks.event } : {}),
     ...(hooks["tool.execute.before"]
       ? { "tool.execute.before": hooks["tool.execute.before"] }
