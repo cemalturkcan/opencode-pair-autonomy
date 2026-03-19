@@ -233,5 +233,22 @@ export function createHarnessMcps(
     };
   }
 
+  if (toggles.figma !== false) {
+    const figmaApiKey =
+      config.credentials?.figma_api_key?.trim() ||
+      process.env.FIGMA_API_KEY?.trim();
+    if (figmaApiKey) {
+      result.figma = {
+        type: "local",
+        command: ["npx", "-y", "figma-developer-mcp", "--stdio"],
+        environment: {
+          FIGMA_API_KEY: figmaApiKey,
+        },
+        enabled: true,
+        timeout: 60000,
+      };
+    }
+  }
+
   return result;
 }

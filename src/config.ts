@@ -17,6 +17,7 @@ const HarnessConfigSchema = z.object({
   credentials: z
     .object({
       jina_api_key: z.string().optional(),
+      figma_api_key: z.string().optional(),
     })
     .optional(),
   hooks: z
@@ -66,6 +67,13 @@ const HarnessConfigSchema = z.object({
       ssh_mcp: z.boolean().optional(),
       sudo_mcp: z.boolean().optional(),
       jina: z.boolean().optional(),
+      figma: z.boolean().optional(),
+    })
+    .optional(),
+  proxy: z
+    .object({
+      enabled: z.boolean().optional(),
+      port: z.number().int().positive().optional(),
     })
     .optional(),
   agents: z
@@ -125,6 +133,11 @@ const DEFAULTS: HarnessConfig = {
     ssh_mcp: true,
     sudo_mcp: false,
     jina: true,
+    figma: true,
+  },
+  proxy: {
+    enabled: true,
+    port: 3456,
   },
   agents: {},
 };
@@ -138,6 +151,7 @@ const ConfigSectionSchemas = {
   memory: HarnessConfigSchema.shape.memory,
   learning: HarnessConfigSchema.shape.learning,
   mcps: HarnessConfigSchema.shape.mcps,
+  proxy: HarnessConfigSchema.shape.proxy,
   agents: HarnessConfigSchema.shape.agents,
 } satisfies Record<keyof HarnessConfig, z.ZodTypeAny>;
 
@@ -242,7 +256,8 @@ export const SAMPLE_PROJECT_CONFIG = `{
   // Project-level overrides for opencode-pair-autonomy
   "default_mode": "pair",
   "credentials": {
-    "jina_api_key": ""
+    "jina_api_key": "",
+    "figma_api_key": ""
   },
   "hooks": {
     "profile": "standard",
@@ -281,7 +296,12 @@ export const SAMPLE_PROJECT_CONFIG = `{
     "pg_mcp": true,
     "ssh_mcp": true,
     "sudo_mcp": false,
-    "jina": true
+    "jina": true,
+    "figma": true
+  },
+  "proxy": {
+    "enabled": true,
+    "port": 3456
   },
   "agents": {
     "pair": {

@@ -12,6 +12,7 @@ export type McpToggles = {
   ssh_mcp?: boolean;
   sudo_mcp?: boolean;
   jina?: boolean;
+  figma?: boolean;
 };
 
 export type AgentOverride = {
@@ -19,6 +20,11 @@ export type AgentOverride = {
   variant?: string;
   description?: string;
   prompt_append?: string;
+};
+
+export type ProxyConfig = {
+  enabled?: boolean;
+  port?: number;
 };
 
 export type HarnessConfig = {
@@ -29,7 +35,9 @@ export type HarnessConfig = {
   };
   credentials?: {
     jina_api_key?: string;
+    figma_api_key?: string;
   };
+  proxy?: ProxyConfig;
   hooks?: {
     profile?: HookProfile;
     intent_gate?: boolean;
