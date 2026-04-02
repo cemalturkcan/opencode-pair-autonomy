@@ -4,25 +4,41 @@ import { BlockingHookError } from "./sdk";
 import {
   profileMatches,
   resolveAgentName,
-  resolveFilePathFromArgs,
   resolveSessionID,
   resolveToolArgs,
   resolveToolName,
+  PRIMARY_AGENTS,
 } from "./runtime";
 
-function isLongRunningCommand(command: string): boolean {
-  return /^(npm|pnpm|yarn|bun)\s+(install|build|test|run)|^cargo\s+(build|test|run)|^go\s+(build|test|run)/.test(
-    command,
+const NODE_COMMAND_RE =
+  /^(npm|pnpm|yarn|bun|npx|bunx|node|tsc|tsx|vite|next|nuxt|vitest|jest|eslint|prettier)\b/;
+
+const NODE_MODULES_BIN_RE = /node_modules\/\.bin\//;
+
+const PLAN_MODE_BLOCKED_TOOLS = new Set(["task", "edit", "write", "patch"]);
+
+function isAgentOrTaskTool(tool: string): boolean {
+  return tool === "task" || tool.startsWith("task_");
+}
+
+function isNodeCommand(command: string): boolean {
+  return (
+    NODE_COMMAND_RE.test(command.trim()) || NODE_MODULES_BIN_RE.test(command)
   );
 }
 
-function extractPatchedPaths(patchText: string): string[] {
-  const matches = patchText.matchAll(
-    /^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm,
+function transformToCmd(command: string, winPath: string): string {
+  return `cmd.exe /c "cd ${winPath} && ${command}"`;
+}
+
+function hasRecentBuildCheck(recentTools: string[]): boolean {
+  return recentTools.some(
+    (t) =>
+      t.includes("tsc") ||
+      t.includes("typecheck") ||
+      t.includes("build") ||
+      t.includes("test"),
   );
-  return [...matches]
-    .map((match) => match[1]?.trim())
-    .filter((value): value is string => Boolean(value));
 }
 
 export function createPreToolUseHook(
@@ -30,6 +46,8 @@ export function createPreToolUseHook(
   runtime: HookRuntime,
   profile: import("../types").HookProfile,
 ) {
+  const recentBashBySession = new Map<string, string[]>();
+
   return {
     "tool.execute.before": async (input: unknown): Promise<void> => {
       const sessionID = resolveSessionID(input);
@@ -43,6 +61,79 @@ export function createPreToolUseHook(
         runtime.incrementToolCount(sessionID);
       }
 
+      // ── Plan mode gate (coordinator only) ───────────────────────
+      if (
+        sessionID &&
+        agent &&
+        PRIMARY_AGENTS.has(agent) &&
+        tool &&
+        runtime.getPlanMode(sessionID) === "planning"
+      ) {
+        const blocked =
+          PLAN_MODE_BLOCKED_TOOLS.has(tool) || isAgentOrTaskTool(tool);
+
+        if (blocked) {
+          const count = runtime.incrementPlanModeBlock(sessionID);
+          const msg =
+            count >= 3
+              ? "[PlanMode] STILL in planning mode. You have attempted execution tools multiple times. STOP trying. Complete your plan with TodoWrite. The user will /go to start execution."
+              : "[PlanMode] You are in planning mode. Cannot use execution tools. Use Read/Glob/Grep/TodoWrite to continue planning. The user will /go to start execution.";
+          throw new BlockingHookError(msg);
+        }
+      }
+
+      // ── WSL node command auto-transform ─────────────────────────
+      if (
+        tool === "bash" &&
+        runtime.isWsl() &&
+        typeof args.command === "string"
+      ) {
+        const command = args.command.trim();
+        if (isNodeCommand(command)) {
+          const transformed = transformToCmd(command, runtime.getWslWinPath());
+          (args as Record<string, unknown>).command = transformed;
+          runtime.appendObservation({
+            timestamp: new Date().toISOString(),
+            phase: "pre",
+            sessionID,
+            agent,
+            tool,
+            note: `wsl_auto_transform: ${command} -> cmd.exe`,
+          });
+        }
+      }
+
+      // ── Git push build gate ─────────────────────────────────────
+      if (
+        tool === "bash" &&
+        typeof args.command === "string" &&
+        args.command.includes("git push") &&
+        profileMatches(profile, ["standard", "strict"])
+      ) {
+        const sessionCmds = sessionID
+          ? (recentBashBySession.get(sessionID) ?? [])
+          : [];
+        if (!hasRecentBuildCheck(sessionCmds)) {
+          throw new BlockingHookError(
+            "[Safety] No build/typecheck detected before git push. Run typecheck first, then push.",
+          );
+        }
+      }
+
+      // ── Track recent bash commands for build gate (per-session) ─
+      if (tool === "bash" && typeof args.command === "string" && sessionID) {
+        let cmds = recentBashBySession.get(sessionID);
+        if (!cmds) {
+          cmds = [];
+          recentBashBySession.set(sessionID, cmds);
+        }
+        cmds.push(args.command);
+        if (cmds.length > 10) {
+          cmds.shift();
+        }
+      }
+
+      // ── Compact suggestion ──────────────────────────────────────
       if (
         sessionID &&
         runtime.shouldSuggestCompact(sessionID) &&
@@ -58,20 +149,7 @@ export function createPreToolUseHook(
         });
       }
 
-      if (tool === "bash" && profileMatches(profile, "strict")) {
-        const command = typeof args.command === "string" ? args.command : "";
-        if (isLongRunningCommand(command)) {
-          runtime.appendObservation({
-            timestamp: new Date().toISOString(),
-            phase: "pre",
-            sessionID,
-            agent,
-            tool,
-            note: "prefer_pty_for_long_running_command",
-          });
-        }
-      }
-
+      // ── Observation logging ─────────────────────────────────────
       runtime.appendObservation({
         timestamp: new Date().toISOString(),
         phase: "pre",

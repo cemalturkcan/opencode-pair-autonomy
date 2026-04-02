@@ -176,49 +176,58 @@ export function createHarnessMcps(
 
   if (toggles.web_agent_mcp !== false) {
     const serverRoot = resolveMcpServerRoot("web-agent-mcp");
-    result["web-agent-mcp"] = {
-      type: "local",
-      command: ["bun", "run", join(serverRoot, "src", "server.ts")],
-      environment: {
-        WEB_AGENT_CHROME_USER_DATA_DIR: join(
-          homedir(),
-          ".config",
-          "default-profile",
-        ),
-        WEB_AGENT_HEADLESS: hasDisplay() ? "false" : "true",
-        WEB_AGENT_DEFAULT_LAUNCH_ARGS: hasDisplay()
-          ? ""
-          : "--disable-gpu,--disable-dev-shm-usage",
-      },
-      enabled: true,
-      timeout: 60000,
-    };
+    const serverEntry = join(serverRoot, "src", "server.ts");
+    if (existsSync(serverEntry)) {
+      result["web-agent-mcp"] = {
+        type: "local",
+        command: ["bun", "run", serverEntry],
+        environment: {
+          WEB_AGENT_CHROME_USER_DATA_DIR: join(
+            homedir(),
+            ".config",
+            "default-profile",
+          ),
+          WEB_AGENT_HEADLESS: hasDisplay() ? "false" : "true",
+          WEB_AGENT_DEFAULT_LAUNCH_ARGS: hasDisplay()
+            ? ""
+            : "--disable-gpu,--disable-dev-shm-usage",
+        },
+        enabled: true,
+        timeout: 60000,
+      };
+    }
   }
 
   if (toggles.pg_mcp !== false) {
     const serverRoot = resolveMcpServerRoot("pg-mcp");
-    result["pg-mcp"] = {
-      type: "local",
-      command: localCommand(join(serverRoot, "src", "index.js")),
-      environment: {
-        PG_MCP_CONFIG_PATH: join(serverRoot, "config.json"),
-      },
-      enabled: true,
-      timeout: 60000,
-    };
+    const pgConfigPath = join(serverRoot, "config.json");
+    if (existsSync(pgConfigPath)) {
+      result["pg-mcp"] = {
+        type: "local",
+        command: localCommand(join(serverRoot, "src", "index.js")),
+        environment: {
+          PG_MCP_CONFIG_PATH: pgConfigPath,
+        },
+        enabled: true,
+        timeout: 60000,
+      };
+    }
   }
 
   if (toggles.ssh_mcp !== false) {
     const serverRoot = resolveMcpServerRoot("ssh-mcp");
-    result["ssh-mcp"] = {
-      type: "local",
-      command: localCommand(join(serverRoot, "src", "index.js")),
-      environment: {
-        SSH_MCP_CONFIG_PATH: join(serverRoot, "config.json"),
-      },
-      enabled: true,
-      timeout: 60000,
-    };
+    const sshConfigPath = join(serverRoot, "config.json");
+    if (existsSync(sshConfigPath)) {
+      result["ssh-mcp"] = {
+        type: "local",
+        command: localCommand(join(serverRoot, "src", "index.js")),
+        environment: {
+          SSH_MCP_CONFIG_PATH: sshConfigPath,
+        },
+        enabled: true,
+        timeout: 60000,
+      };
+    }
   }
 
   if (toggles.jina !== false) {
@@ -229,14 +238,16 @@ export function createHarnessMcps(
         ? ensureBearer(process.env.JINA_API_KEY)
         : readExistingJinaBearer();
 
-    result.jina = {
-      type: "remote",
-      url: "https://mcp.jina.ai/v1",
-      ...(bearer ? { headers: { Authorization: bearer } } : {}),
-      enabled: true,
-      oauth: false,
-      timeout: 60000,
-    };
+    if (bearer) {
+      result.jina = {
+        type: "remote",
+        url: "https://mcp.jina.ai/v1",
+        headers: { Authorization: bearer },
+        enabled: true,
+        oauth: false,
+        timeout: 60000,
+      };
+    }
   }
 
   if (toggles.figma_console !== false) {
@@ -270,18 +281,27 @@ export function createHarnessMcps(
         enabled: true,
         timeout: 60000,
       };
-    } else {
+    } else if (figmaAccessToken) {
       result["figma-console"] = {
         type: "local",
         command: ["npx", "-y", "figma-console-mcp@latest"],
         environment: {
-          ...(figmaAccessToken ? { FIGMA_ACCESS_TOKEN: figmaAccessToken } : {}),
+          FIGMA_ACCESS_TOKEN: figmaAccessToken,
           ENABLE_MCP_APPS: "true",
         },
         enabled: true,
         timeout: 60000,
       };
     }
+  }
+
+  if (toggles.mariadb !== false) {
+    result.mariadb = {
+      type: "local",
+      command: ["npx", "-y", "@cemalturkcann/mariadb-mcp-server"],
+      enabled: true,
+      timeout: 60000,
+    };
   }
 
   return result;

@@ -1,26 +1,23 @@
 import type { AgentLike, HarnessConfig } from "./types";
+import { deepMerge } from "./utils";
+import { buildCoordinatorPrompt } from "./prompts/coordinator";
 import {
-  buildBuilderPrompt,
-  buildRepairPrompt,
-  buildRepoScoutPrompt,
+  buildWorkerPrompt,
   buildResearcherPrompt,
-  buildVerifierPrompt,
+  buildReviewerPrompt,
   buildYetAnotherReviewerPrompt,
-} from "./prompts/subagents";
-import { buildAutonomousPrompt } from "./prompts/autonomous";
-import { buildPairPrompt } from "./prompts/pair";
-import { buildReviewerPrompt } from "./prompts/reviewer";
-import { buildUiDeveloperPrompt } from "./prompts/ui-developer";
-import { buildWebSearchPrompt } from "./prompts/web-search";
+  buildVerifierPrompt,
+  buildRepairPrompt,
+  buildUiDeveloperPrompt,
+  buildRepoScoutPrompt,
+} from "./prompts/workers";
 
 function withOverride(
   base: AgentLike,
   override?: Record<string, unknown>,
 ): AgentLike {
-  return {
-    ...base,
-    ...(override ?? {}),
-  };
+  if (!override) return base;
+  return deepMerge(base, override);
 }
 
 function taskPermissions(...allowedPatterns: string[]) {
@@ -31,17 +28,35 @@ function taskPermissions(...allowedPatterns: string[]) {
   return permissions;
 }
 
-const PRIMARY_TASK_PERMISSIONS = taskPermissions(
-  "repo-scout",
+const COORDINATOR_TASK_PERMISSIONS = taskPermissions(
+  "worker",
   "researcher",
-  "builder*",
-  "verifier",
-  "repair",
   "reviewer",
   "yet-another-reviewer",
-  "web-search",
+  "verifier",
+  "repair",
   "ui-developer",
+  "repo-scout",
 );
+
+// Only the expensive MCPs are disabled on the coordinator (~30k token savings).
+// Lighter MCPs stay open so the coordinator can use them directly.
+const COORDINATOR_DISABLED_TOOLS: Record<string, boolean> = {
+  "jina_*": false,
+  "web-agent-mcp_*": false,
+  "figma-console_*": false,
+};
+
+// Per-worker MCP restrictions: disable MCPs they don't need.
+function workerDisabledMcps(
+  ...disabledPrefixes: string[]
+): Record<string, boolean> {
+  const tools: Record<string, boolean> = {};
+  for (const prefix of disabledPrefixes) {
+    tools[`${prefix}_*`] = false;
+  }
+  return tools;
+}
 
 export function createHarnessAgents(
   config: HarnessConfig,
@@ -49,152 +64,189 @@ export function createHarnessAgents(
   const overrides = config.agents ?? {};
 
   return {
-    // ── Primary agents (tab-switchable, all Opus max) ──────────────
-    pair: withOverride(
-      {
-        mode: "primary",
-        description: "Collaborative technical pair programmer.",
-        model: "anthropic/claude-opus-4-6",
-        variant: "max",
-        prompt: buildPairPrompt(overrides.pair?.prompt_append),
-        permission: { task: PRIMARY_TASK_PERMISSIONS },
-      },
-      overrides.pair,
-    ),
-    autonomous: withOverride(
-      {
-        mode: "primary",
-        description: "Checkpointed autonomous implementation agent.",
-        model: "anthropic/claude-opus-4-6",
-        variant: "max",
-        prompt: buildAutonomousPrompt(overrides.autonomous?.prompt_append),
-        permission: { task: PRIMARY_TASK_PERMISSIONS },
-      },
-      overrides.autonomous,
-    ),
-    reviewer: withOverride(
-      {
-        mode: "primary",
-        description: "Primary code reviewer with cross-model delegation.",
-        model: "anthropic/claude-opus-4-6",
-        variant: "max",
-        prompt: buildReviewerPrompt(overrides.reviewer?.prompt_append),
-        permission: {
-          task: taskPermissions("yet-another-reviewer", "repo-scout"),
-        },
-      },
-      overrides.reviewer,
-    ),
-    "web-search": withOverride(
-      {
-        mode: "primary",
-        description: "Web research agent with full MCP access.",
-        model: "anthropic/claude-opus-4-6",
-        variant: "max",
-        prompt: buildWebSearchPrompt(overrides["web-search"]?.prompt_append),
-        permission: {
-          task: taskPermissions("repo-scout", "researcher"),
-        },
-      },
-      overrides["web-search"],
-    ),
-    "ui-developer": withOverride(
+    // ── Coordinator (primary agent) ──────────────────────────────
+    coordinator: withOverride(
       {
         mode: "primary",
         description:
-          "UI developer and design craftsman with Figma extraction and live review.",
+          "Senior technical lead. Plans, argues, delegates, synthesizes.",
         model: "anthropic/claude-opus-4-6",
         variant: "max",
-        prompt: buildUiDeveloperPrompt(
-          overrides["ui-developer"]?.prompt_append,
-        ),
-        permission: {
-          task: taskPermissions("repo-scout", "builder*", "verifier", "repair"),
-        },
+        prompt: buildCoordinatorPrompt(overrides.coordinator?.prompt_append),
+        tools: COORDINATOR_DISABLED_TOOLS,
+        permission: { task: COORDINATOR_TASK_PERMISSIONS },
       },
-      overrides["ui-developer"],
+      overrides.coordinator,
     ),
 
-    // ── Subagents ──────────────────────────────────────────────────
-    "repo-scout": withOverride(
+    // ── Workers (subagents) ──────────────────────────────────────
+    worker: withOverride(
       {
         mode: "subagent",
         hidden: true,
-        description: "Repository pattern scout.",
+        description: "General purpose implementation worker.",
         model: "anthropic/claude-sonnet-4-6",
         variant: "max",
-        prompt: buildRepoScoutPrompt(overrides["repo-scout"]?.prompt_append),
+        prompt: buildWorkerPrompt(overrides.worker?.prompt_append),
+        tools: workerDisabledMcps("jina", "web-agent-mcp", "figma-console"),
       },
-      overrides["repo-scout"],
+      overrides.worker,
     ),
+
     researcher: withOverride(
       {
         mode: "subagent",
         hidden: true,
-        description: "External docs and library researcher.",
+        description: "Web and doc researcher.",
         model: "anthropic/claude-sonnet-4-6",
-        variant: "max",
+        variant: "none",
         prompt: buildResearcherPrompt(overrides.researcher?.prompt_append),
+        tools: workerDisabledMcps(
+          "web-agent-mcp",
+          "figma-console",
+          "pg-mcp",
+          "ssh-mcp",
+          "mariadb",
+        ),
       },
       overrides.researcher,
     ),
-    builder: withOverride(
-      {
-        mode: "subagent",
-        hidden: true,
-        description: "Scoped implementation builder.",
-        model: "anthropic/claude-sonnet-4-6",
-        variant: "max",
-        prompt: buildBuilderPrompt(overrides.builder?.prompt_append),
-      },
-      overrides.builder,
-    ),
-    "builder-deep": withOverride(
-      {
-        mode: "subagent",
-        hidden: true,
-        description: "Deep implementation builder.",
-        model: "anthropic/claude-opus-4-6",
-        variant: "max",
-        prompt: buildBuilderPrompt(overrides["builder-deep"]?.prompt_append),
-      },
-      overrides["builder-deep"],
-    ),
-    verifier: withOverride(
-      {
-        mode: "subagent",
-        hidden: true,
-        description: "Verifier and failure classifier.",
-        model: "anthropic/claude-opus-4-6",
-        variant: "max",
-        prompt: buildVerifierPrompt(overrides.verifier?.prompt_append),
-      },
-      overrides.verifier,
-    ),
-    repair: withOverride(
-      {
-        mode: "subagent",
-        hidden: true,
-        description: "Scoped repair agent.",
-        model: "anthropic/claude-opus-4-6",
-        variant: "max",
-        prompt: buildRepairPrompt(overrides.repair?.prompt_append),
-      },
-      overrides.repair,
-    ),
-    "yet-another-reviewer": withOverride(
+
+    reviewer: withOverride(
       {
         mode: "subagent",
         hidden: true,
         description:
-          "Cross-model independent reviewer. Provides a different AI perspective for review diversity.",
-        model: "openai/gpt-5.4",
+          "Senior code reviewer. Finds subtle bugs and security issues.",
+        model: "anthropic/claude-opus-4-6",
         variant: "max",
+        prompt: buildReviewerPrompt(overrides.reviewer?.prompt_append),
+        tools: {
+          ...workerDisabledMcps(
+            "jina",
+            "websearch",
+            "web-agent-mcp",
+            "figma-console",
+            "pg-mcp",
+            "ssh-mcp",
+            "mariadb",
+          ),
+          bash: false,
+          edit: false,
+          write: false,
+          patch: false,
+        },
+      },
+      overrides.reviewer,
+    ),
+
+    "yet-another-reviewer": withOverride(
+      {
+        mode: "subagent",
+        hidden: true,
+        description: "Cross-model independent reviewer for review diversity.",
+        model: "openai/gpt-5.4",
+        variant: "xhigh",
         prompt: buildYetAnotherReviewerPrompt(
           overrides["yet-another-reviewer"]?.prompt_append,
         ),
+        tools: {
+          ...workerDisabledMcps(
+            "jina",
+            "websearch",
+            "web-agent-mcp",
+            "figma-console",
+            "pg-mcp",
+            "ssh-mcp",
+            "mariadb",
+          ),
+          bash: false,
+          edit: false,
+          write: false,
+          patch: false,
+        },
       },
       overrides["yet-another-reviewer"],
+    ),
+
+    verifier: withOverride(
+      {
+        mode: "subagent",
+        hidden: true,
+        description: "Build, test, lint verifier.",
+        model: "anthropic/claude-sonnet-4-6",
+        variant: "none",
+        prompt: buildVerifierPrompt(overrides.verifier?.prompt_append),
+        tools: workerDisabledMcps(
+          "context7",
+          "jina",
+          "websearch",
+          "grep_app",
+          "web-agent-mcp",
+          "figma-console",
+          "pg-mcp",
+          "ssh-mcp",
+          "mariadb",
+        ),
+      },
+      overrides.verifier,
+    ),
+
+    repair: withOverride(
+      {
+        mode: "subagent",
+        hidden: true,
+        description: "Scoped failure repair agent.",
+        model: "anthropic/claude-sonnet-4-6",
+        variant: "max",
+        prompt: buildRepairPrompt(overrides.repair?.prompt_append),
+        tools: workerDisabledMcps(
+          "jina",
+          "websearch",
+          "grep_app",
+          "web-agent-mcp",
+          "figma-console",
+        ),
+      },
+      overrides.repair,
+    ),
+
+    "ui-developer": withOverride(
+      {
+        mode: "subagent",
+        hidden: true,
+        description: "Frontend specialist with Figma and browser automation.",
+        model: "anthropic/claude-sonnet-4-6",
+        variant: "max",
+        prompt: buildUiDeveloperPrompt(
+          overrides["ui-developer"]?.prompt_append,
+        ),
+        tools: workerDisabledMcps("pg-mcp", "ssh-mcp", "mariadb"),
+      },
+      overrides["ui-developer"],
+    ),
+
+    "repo-scout": withOverride(
+      {
+        mode: "subagent",
+        hidden: true,
+        description: "Fast codebase explorer.",
+        model: "anthropic/claude-sonnet-4-6",
+        variant: "none",
+        prompt: buildRepoScoutPrompt(overrides["repo-scout"]?.prompt_append),
+        tools: workerDisabledMcps(
+          "context7",
+          "jina",
+          "websearch",
+          "grep_app",
+          "web-agent-mcp",
+          "figma-console",
+          "pg-mcp",
+          "ssh-mcp",
+          "mariadb",
+        ),
+      },
+      overrides["repo-scout"],
     ),
 
     // ── Disable OpenCode built-in agents ─────────────────────────

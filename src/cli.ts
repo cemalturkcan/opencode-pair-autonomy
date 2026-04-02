@@ -38,7 +38,6 @@ function printConfig(): void {
   console.log(`{
   "plugin": [
     "file://<project-root>",
-    "@tarquinen/opencode-dcp@latest",
     "@zenobius/opencode-skillful@latest",
     "@franlol/opencode-md-table-formatter@latest",
     "opencode-pty@latest",

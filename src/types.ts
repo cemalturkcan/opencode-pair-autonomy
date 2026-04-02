@@ -1,11 +1,31 @@
-export type HarnessMode =
-  | "pair"
-  | "autonomous"
+export type HarnessMode = "coordinator";
+
+export type PlanModeState = "planning" | "executing";
+
+export type WorkerType =
+  | "worker"
+  | "researcher"
   | "reviewer"
-  | "web-search"
-  | "ui-developer";
+  | "yet-another-reviewer"
+  | "verifier"
+  | "repair"
+  | "ui-developer"
+  | "repo-scout";
 
 export type HookProfile = "minimal" | "standard" | "strict";
+
+export type WslState = {
+  enabled: boolean;
+  winDrive: string;
+  winProjectPath: string;
+};
+
+export type ResourceMap = {
+  sshHosts: string[];
+  dbConnections: { mariadb: string[]; postgres: string[] };
+  projectDocs: string[];
+  skills: string[];
+};
 
 export type McpToggles = {
   context7?: boolean;
@@ -18,6 +38,7 @@ export type McpToggles = {
   sudo_mcp?: boolean;
   jina?: boolean;
   figma_console?: boolean;
+  mariadb?: boolean;
 };
 
 export type FigmaConsoleConfig = {
@@ -44,8 +65,6 @@ export type HarnessConfig = {
   figma_console?: FigmaConsoleConfig;
   hooks?: {
     profile?: HookProfile;
-    intent_gate?: boolean;
-    todo_continuation?: boolean;
     comment_guard?: boolean;
     session_start?: boolean;
     pre_tool_use?: boolean;
@@ -54,8 +73,6 @@ export type HarnessConfig = {
     stop?: boolean;
     session_end?: boolean;
     file_edited?: boolean;
-    flush_queued_prompts?: boolean;
-    todo_continuation_cooldown_ms?: number;
     prompt_refiner?: boolean;
   };
   memory?: {

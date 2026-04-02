@@ -12,6 +12,38 @@ const processedFingerprints = new Map<string, string>();
  *  get their refined version re-applied on every transform call. */
 const refinedTextCache = new Map<string, string>();
 
+const MAX_CACHE_SIZE = 200;
+
+function evictCacheIfNeeded(): void {
+  // processedFingerprints: sessionID → last fingerprint (always small, one per session)
+  if (processedFingerprints.size > MAX_CACHE_SIZE) {
+    const excess = processedFingerprints.size - MAX_CACHE_SIZE;
+    const keys = [...processedFingerprints.keys()].slice(0, excess);
+    for (const key of keys) processedFingerprints.delete(key);
+  }
+
+  // pendingVisibleDebug: sessionID → text (always small)
+  if (pendingVisibleDebug.size > MAX_CACHE_SIZE) {
+    const excess = pendingVisibleDebug.size - MAX_CACHE_SIZE;
+    const keys = [...pendingVisibleDebug.keys()].slice(0, excess);
+    for (const key of keys) pendingVisibleDebug.delete(key);
+  }
+
+  // refinedTextCache: fingerprint → refinedText (grows with unique messages)
+  // Only evict if significantly over limit; keep active session fingerprints
+  if (refinedTextCache.size > MAX_CACHE_SIZE) {
+    const activeFingerprints = new Set(processedFingerprints.values());
+    const excess = refinedTextCache.size - MAX_CACHE_SIZE;
+    let evicted = 0;
+    for (const key of refinedTextCache.keys()) {
+      if (evicted >= excess) break;
+      if (activeFingerprints.has(key)) continue;
+      refinedTextCache.delete(key);
+      evicted++;
+    }
+  }
+}
+
 function fingerprint(text: string): string {
   let hash = 0;
   for (let i = 0; i < text.length; i++) {
@@ -411,6 +443,7 @@ export function createPromptRefinerHook(ctx: PluginInput) {
       _input: unknown,
       output: { messages?: Message[] },
     ) => {
+      evictCacheIfNeeded();
       // 1. Strip [refined prompt] prefixes from assistant messages
       //    so the model never sees debug annotations in conversation history.
       stripRefinedPromptFromHistory(output.messages ?? []);

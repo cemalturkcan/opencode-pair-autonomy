@@ -6,7 +6,6 @@ export function createPreCompactHook(runtime: HookRuntime) {
     "experimental.session.compacting": async (
       input?: unknown,
     ): Promise<void> => {
-      // session-level event, bare .id fallback is safe
       const sessionID = resolveSessionOrEntityID(input);
       if (!sessionID) {
         return;

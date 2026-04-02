@@ -223,75 +223,63 @@ export function promoteLearnedPatterns(params: {
     .slice(0, maxPatterns);
 }
 
-function renderStack(stack: string | undefined): string {
-  if (!stack) {
-    return "none detected";
-  }
-
-  return stack
-    .split("|")
-    .filter(Boolean)
-    .map((id) => getProjectFactLabel(id))
-    .join(", ");
-}
-
 function renderPatternSummary(pattern: LearnedPattern): string {
-  const messageKey = pattern.summaryKey;
-  if (!messageKey) {
-    return pattern.summary ?? pattern.id;
-  }
+  if (pattern.summary) return pattern.summary;
 
-  const values = { ...(pattern.summaryValues ?? {}) };
-  if (typeof values.stack === "string") {
-    values.stack = renderStack(values.stack);
-  }
-
-  switch (messageKey) {
-    case "learning.pattern.user:no-routine-permission-asks":
+  switch (pattern.id) {
+    case "user:no-routine-permission-asks":
       return "Do not ask the user for routine permission; proceed unless an external blocker exists.";
-    case "learning.pattern.user:explain-disagreement-explicitly":
+    case "user:explain-disagreement-explicitly":
       return "When disagreeing, explain the tradeoff explicitly instead of silently overriding the user.";
-    case "learning.pattern.user:subagents-are-exceptional":
+    case "user:subagents-are-exceptional":
       return "Use subagents sparingly; reserve them for large scans, async work, research, or bounded repair/verification.";
-    case "learning.pattern.user:implement-in-phases":
+    case "user:implement-in-phases":
       return "Implement larger changes in phases instead of forcing them into one jump.";
-    case "learning.pattern.repo:package-manager":
-      return `Prefer ${String(values.packageManager ?? "unknown")} as the default package manager for this repository.`;
-    case "learning.pattern.repo:stack":
-      return `Repository stack centers on ${String(values.stack ?? "unknown")}.`;
-    case "learning.pattern.tooling:prefer-pty-for-long-running-commands":
-      return "Prefer PTY/background sessions for long-running build, test, and server commands.";
-    case "learning.pattern.failure:console-log-regression":
-      return "Watch for stray `console.log` statements after edits; they recur often enough to merit explicit checks.";
-    case "learning.pattern.workflow:verify-after-build-failure":
+    case "workflow:verify-after-build-failure":
       return "When build or test commands fail, follow with verification or repair instead of treating the full log as equal-priority noise.";
-    default:
-      return pattern.summary ?? pattern.id;
+    case "failure:console-log-regression":
+      return "Watch for stray `console.log` statements after edits; they recur often enough to merit explicit checks.";
+    case "tooling:prefer-pty-for-long-running-commands":
+      return "Prefer PTY/background sessions for long-running build, test, and server commands.";
+    default: {
+      // Handle dynamic IDs like "repo:package-manager:bun" and "repo:stack:typescript|react"
+      if (pattern.id.startsWith("repo:package-manager:")) {
+        const pm = pattern.id.split(":")[2] ?? "unknown";
+        return `Prefer ${pm} as the default package manager for this repository.`;
+      }
+      if (pattern.id.startsWith("repo:stack:")) {
+        const stack = pattern.id.split(":").slice(2).join(":");
+        const labels = stack
+          .split("|")
+          .filter(Boolean)
+          .map((id) => getProjectFactLabel(id))
+          .join(", ");
+        return `Repository stack centers on ${labels || "unknown"}.`;
+      }
+      return pattern.id;
+    }
   }
 }
 
 function renderEvidence(evidence: LearningEvidence): string {
-  if (typeof evidence === "string") {
-    return evidence;
-  }
-  if (evidence.text) {
-    return evidence.text;
-  }
-  if (!evidence.messageKey) {
-    return "";
-  }
-  const values = { ...(evidence.values ?? {}) };
-  if (typeof values.stack === "string") {
-    values.stack = renderStack(values.stack);
-  }
+  if (typeof evidence === "string") return evidence;
+  if (evidence.text) return evidence.text;
 
+  const values = evidence.values ?? {};
   switch (evidence.messageKey) {
     case "learning.evidence.message":
       return `message: ${String(values.text ?? "")}`;
     case "learning.evidence.package_manager":
       return `Detected package manager: ${String(values.packageManager ?? "unknown")}`;
-    case "learning.evidence.stack":
-      return `Detected languages/frameworks: ${String(values.stack ?? "unknown")}`;
+    case "learning.evidence.stack": {
+      const stack = String(values.stack ?? "unknown");
+      const labels = stack
+        .split("|")
+        .filter(Boolean)
+        .map((id) => getProjectFactLabel(id))
+        .join(", ");
+      return `Detected languages/frameworks: ${labels || "unknown"}`;
+    }
     case "learning.evidence.long_running":
       return `Long-running command reminders seen ${String(values.count ?? 0)} time(s)`;
     case "learning.evidence.console_log":

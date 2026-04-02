@@ -35,7 +35,6 @@ type GitHubRelease = {
  * The vendor background-agents-local plugin stays as a `file://` entry.
  */
 const MANAGED_PLUGIN_ENTRIES = [
-  "@tarquinen/opencode-dcp",
   "@zenobius/opencode-skillful",
   "@franlol/opencode-md-table-formatter",
   "opencode-pty",
@@ -48,7 +47,6 @@ const MANAGED_PACKAGE_NAMES = [
   "opencode-pty",
   "@mohak34/opencode-notifier",
   "@zenobius/opencode-skillful",
-  "@tarquinen/opencode-dcp",
   "@franlol/opencode-md-table-formatter",
   "opencode-anthropic-login-via-cli",
 ] as const;
@@ -57,7 +55,6 @@ const PACKAGE_SPECS: Record<string, string> = {
   "opencode-pty": "latest",
   "@mohak34/opencode-notifier": "latest",
   "@zenobius/opencode-skillful": "latest",
-  "@tarquinen/opencode-dcp": "latest",
   "@franlol/opencode-md-table-formatter": "latest",
   "opencode-anthropic-login-via-cli": "latest",
   "unique-names-generator": "latest",
@@ -98,7 +95,6 @@ function getConfigPaths(configDir: string) {
     configJsonc: join(configDir, "opencode.jsonc"),
     packageJson: join(configDir, "package.json"),
     harnessConfig: join(configDir, "opencode-pair-autonomy.jsonc"),
-    dcpConfig: join(configDir, "dcp.jsonc"),
     vendorDir: join(configDir, "vendor", "opencode-background-agents-local"),
     vendorMcpDir: join(configDir, "vendor", "mcp"),
     shellStrategyDir: join(configDir, "plugin", "shell-strategy"),
@@ -569,29 +565,6 @@ function writeHarnessConfig(
   writeJson(filePath, merged);
 }
 
-const DEFAULT_DCP_CONFIG: JsonRecord = {
-  $schema:
-    "https://raw.githubusercontent.com/Opencode-DCP/opencode-dynamic-context-pruning/master/dcp.schema.json",
-  compress: {
-    nudgeFrequency: 10,
-    iterationNudgeThreshold: 25,
-    nudgeForce: "soft",
-  },
-};
-
-function writeDcpConfig(filePath: string): void {
-  const current = existsSync(filePath) ? readJsonLike(filePath) : {};
-  const merged: JsonRecord = {
-    ...DEFAULT_DCP_CONFIG,
-    ...current,
-    compress: {
-      ...((DEFAULT_DCP_CONFIG.compress as JsonRecord | undefined) ?? {}),
-      ...((current.compress as JsonRecord | undefined) ?? {}),
-    },
-  };
-  writeJson(filePath, merged);
-}
-
 const DEFAULT_NOTIFIER_CONFIG: JsonRecord = {
   sound: true,
   notification: true,
@@ -876,7 +849,7 @@ function updateConfig(paths: ReturnType<typeof getConfigPaths>): string {
     config.instructions,
     paths.shellStrategyDir,
   );
-  config.default_agent = "pair";
+  config.default_agent = "coordinator";
   forceAllowPermissions(config);
   writeJson(detected.path, config);
   return detected.path;
@@ -1035,7 +1008,6 @@ export async function installHarness(options?: { fresh?: boolean }): Promise<{
     figmaAccessToken,
     figmaConsoleSshHost,
   );
-  writeDcpConfig(paths.dcpConfig);
   writeNotifierConfig(paths.notifierConfig);
   await runBunInstall(configDir);
   await ensureInstalledHarnessBuild(configDir);

@@ -1,41 +1,30 @@
 import type { HarnessConfig } from "./types";
 
-export function createHarnessCommands(config: HarnessConfig): Record<string, Record<string, unknown>> {
+export function createHarnessCommands(
+  config: HarnessConfig,
+): Record<string, Record<string, unknown>> {
   if (config.commands?.enabled === false) {
     return {};
   }
 
   return {
-    pair: {
-      template: "{{args}}",
-      description: "Run the request with the pair agent.",
-      agent: "pair",
+    go: {
+      template:
+        "Switch to execution mode. Begin executing the current plan. $ARGUMENTS",
+      description: "Exit plan mode and start execution.",
+      agent: "coordinator",
     },
-    autonomous: {
-      template: "{{args}}",
-      description: "Run the request with the autonomous agent.",
-      agent: "autonomous",
+    plan: {
+      template:
+        "Switch to planning mode. Pause execution and return to planning. $ARGUMENTS",
+      description: "Return to plan mode.",
+      agent: "coordinator",
     },
-    review: {
-      template: "{{args}}",
-      description: "Run a code review with the reviewer agent.",
-      agent: "reviewer",
-    },
-    search: {
-      template: "{{args}}",
-      description: "Run a web research task with the web-search agent.",
-      agent: "web-search",
-    },
-    ui: {
-      template: "{{args}}",
-      description: "Run a UI/design task with the ui-developer agent.",
-      agent: "ui-developer",
-    },
-    verify: {
-      template: "Run a focused verification pass for the current work and report the first meaningful failures or confirmation of success. {{args}}",
-      description: "Run a focused verifier pass.",
-      agent: "verifier",
-      subtask: true,
+    "create-skill": {
+      template:
+        "Analyze the current session learnings and create a reusable skill from them. Save to ~/.config/opencode/skills/. $ARGUMENTS",
+      description: "Create a skill from session learnings.",
+      agent: "coordinator",
     },
   };
 }

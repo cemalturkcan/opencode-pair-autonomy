@@ -1,17 +1,11 @@
-import {
-  appendFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  writeFileSync,
-} from "node:fs";
+import { appendFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import type { PluginInput } from "@opencode-ai/plugin";
 import { detectLocaleFromTexts, type SupportedLocale } from "../i18n";
 import type { HarnessConfig, HookProfile } from "../types";
+import { ensureDir, readJson, readText, writeJson } from "../utils";
 import {
   promoteLearnedPatterns,
   renderInjectedPatterns,
@@ -67,41 +61,8 @@ function getStateRoot(config: HarnessConfig): string {
   return join(configDir, "pair-autonomy-state");
 }
 
-function ensureDir(dirPath: string): void {
-  mkdirSync(dirPath, { recursive: true });
-}
-
 function projectKey(directory: string): string {
   return createHash("sha1").update(directory).digest("hex").slice(0, 12);
-}
-
-function readJson<T>(filePath: string, fallback: T): T {
-  if (!existsSync(filePath)) {
-    return fallback;
-  }
-
-  try {
-    return JSON.parse(readFileSync(filePath, "utf8")) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeJson(filePath: string, value: unknown): void {
-  ensureDir(dirname(filePath));
-  writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-}
-
-function readText(filePath: string): string | undefined {
-  if (!existsSync(filePath)) {
-    return undefined;
-  }
-
-  try {
-    return readFileSync(filePath, "utf8");
-  } catch {
-    return undefined;
-  }
 }
 
 function truncate(text: string, maxChars: number): string {
@@ -131,13 +92,7 @@ export function profileMatches(
  * Subagents spawned via Task tool should NOT get previous-session context
  * injected into their system prompt — it causes session mixing.
  */
-export const PRIMARY_AGENTS = new Set([
-  "pair",
-  "autonomous",
-  "reviewer",
-  "web-search",
-  "ui-developer",
-]);
+export const PRIMARY_AGENTS = new Set(["coordinator"]);
 
 /**
  * Resolve a session ID from a hook input object.
@@ -283,12 +238,75 @@ export function createHookRuntime(ctx: PluginInput, config: HarnessConfig) {
   const observationsPath = join(learningDir, "observations.ndjson");
   const learnedPatternsPath = join(learningDir, "patterns.json");
   const learnedPatternsMarkdownPath = join(learningDir, "patterns.md");
+  const planModesPath = join(projectRoot, "plan-modes.json");
   const pendingInjection = new Map<string, PendingInjection>();
   const sessionAgents = new Map<string, string>();
   const sessionLocales = new Map<string, SupportedLocale>();
   const editedFiles = new Map<string, Set<string>>();
   const toolCounts = new Map<string, number>();
   const compactHints = new Map<string, number>();
+
+  // ── Coordinator-specific state ────────────────────────────────
+  const planModes = new Map<string, "planning" | "executing">();
+  let planModesLoadedFromDisk = false;
+
+  function loadPlanModesFromDisk(): void {
+    if (planModesLoadedFromDisk) return;
+    planModesLoadedFromDisk = true;
+    const persisted = readJson<Record<string, "planning" | "executing">>(
+      planModesPath,
+      {},
+    );
+    for (const [id, mode] of Object.entries(persisted)) {
+      if (!planModes.has(id) && (mode === "planning" || mode === "executing")) {
+        planModes.set(id, mode);
+      }
+    }
+  }
+
+  function persistPlanModes(): void {
+    const entries: Record<string, "planning" | "executing"> = {};
+    for (const [id, mode] of planModes) {
+      entries[id] = mode;
+    }
+    writeJson(planModesPath, entries);
+  }
+
+  const planModeBlockCounts = new Map<string, number>();
+  const workerMessageCounts = new Map<string, number>();
+  const reviewCycleCounts = new Map<string, number>();
+
+  const MAX_TRACKED_SESSIONS = 50;
+  const sessionMaps = [
+    pendingInjection,
+    sessionAgents,
+    sessionLocales,
+    editedFiles,
+    toolCounts,
+    compactHints,
+    planModes,
+    planModeBlockCounts,
+    workerMessageCounts,
+    reviewCycleCounts,
+  ] as Map<string, unknown>[];
+
+  function evictStaleSessions(): void {
+    if (pendingInjection.size <= MAX_TRACKED_SESSIONS) return;
+    const staleCount = pendingInjection.size - MAX_TRACKED_SESSIONS;
+    const staleKeys = [...pendingInjection.keys()].slice(0, staleCount);
+    for (const key of staleKeys) {
+      for (const map of sessionMaps) {
+        map.delete(key);
+      }
+    }
+  }
+
+  let wslMode = ctx.directory.startsWith("/mnt/");
+  let wslWinPath = wslMode
+    ? ctx.directory
+        .replace(/^\/mnt\/(\w)/, (_, d: string) => `${d.toUpperCase()}:`)
+        .replace(/\//g, "\\")
+    : "";
 
   ensureDir(sessionsDir);
   ensureDir(learningDir);
@@ -400,6 +418,7 @@ export function createHookRuntime(ctx: PluginInput, config: HarnessConfig) {
   }
 
   function prepareSessionContext(sessionID: string): void {
+    evictStaleSessions();
     pendingInjection.set(sessionID, {
       injected: false,
     });
@@ -509,6 +528,95 @@ export function createHookRuntime(ctx: PluginInput, config: HarnessConfig) {
     editedFiles.delete(sessionID);
     toolCounts.delete(sessionID);
     compactHints.delete(sessionID);
+    planModes.delete(sessionID);
+    planModeBlockCounts.delete(sessionID);
+    workerMessageCounts.delete(sessionID);
+    reviewCycleCounts.delete(sessionID);
+    persistPlanModes();
+  }
+
+  // ── Plan mode ─────────────────────────────────────────────────
+  function getPlanMode(sessionID: string): "planning" | "executing" {
+    loadPlanModesFromDisk();
+    return planModes.get(sessionID) ?? "planning";
+  }
+
+  function setPlanMode(
+    sessionID: string,
+    mode: "planning" | "executing",
+  ): void {
+    planModes.set(sessionID, mode);
+    if (mode === "planning") {
+      planModeBlockCounts.delete(sessionID);
+    }
+    persistPlanModes();
+  }
+
+  function incrementPlanModeBlock(sessionID: string): number {
+    const count = (planModeBlockCounts.get(sessionID) ?? 0) + 1;
+    planModeBlockCounts.set(sessionID, count);
+    return count;
+  }
+
+  function resetPlanModeBlockCount(sessionID: string): void {
+    planModeBlockCounts.delete(sessionID);
+  }
+
+  // ── Worker continuation ───────────────────────────────────────
+  function incrementWorkerMessages(workerID: string): number {
+    const count = (workerMessageCounts.get(workerID) ?? 0) + 1;
+    workerMessageCounts.set(workerID, count);
+    return count;
+  }
+
+  function shouldSpawnFresh(workerID: string): boolean {
+    return (workerMessageCounts.get(workerID) ?? 0) >= 5;
+  }
+
+  // ── Review cycles ─────────────────────────────────────────────
+  function incrementReviewCycle(sessionID: string): number {
+    const count = (reviewCycleCounts.get(sessionID) ?? 0) + 1;
+    reviewCycleCounts.set(sessionID, count);
+    return count;
+  }
+
+  function getReviewCycleCount(sessionID: string): number {
+    return reviewCycleCounts.get(sessionID) ?? 0;
+  }
+
+  // ── WSL ────────────────────────────────────────────────────────
+  function isWsl(): boolean {
+    return wslMode;
+  }
+
+  function getWslWinPath(): string {
+    return wslWinPath;
+  }
+
+  // ── Mode injection for system prompt ──────────────────────────
+  function buildModeInjection(sessionID: string): string {
+    const mode = getPlanMode(sessionID);
+    const parts: string[] = [];
+
+    if (mode === "planning") {
+      parts.push(
+        "[Mode: Planning] Create your plan with TodoWrite. User will /go to execute.",
+      );
+    } else {
+      parts.push(
+        "[Mode: Executing] Proceed with worker spawning and todo execution.",
+      );
+    }
+
+    if (wslMode) {
+      parts.push(
+        `[WSL] Windows project at ${wslWinPath}. Read/Edit via /mnt/ paths.`,
+        "Node tools (npm/pnpm/yarn/bun/npx/bunx/node/tsc/tsx/vite/next/nuxt/vitest/jest/eslint/prettier): run via cmd.exe.",
+        "Git/SSH/curl/grep: WSL bash OK.",
+      );
+    }
+
+    return parts.join("\n");
   }
 
   return {
@@ -532,6 +640,18 @@ export function createHookRuntime(ctx: PluginInput, config: HarnessConfig) {
     shouldSuggestCompact,
     clearSession,
     readText,
+    // Coordinator state
+    getPlanMode,
+    setPlanMode,
+    incrementPlanModeBlock,
+    resetPlanModeBlockCount,
+    incrementWorkerMessages,
+    shouldSpawnFresh,
+    incrementReviewCycle,
+    getReviewCycleCount,
+    isWsl,
+    getWslWinPath,
+    buildModeInjection,
   };
 }
 

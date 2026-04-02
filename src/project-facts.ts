@@ -20,6 +20,8 @@ const PROJECT_FACT_LABELS = {
   python: "Python",
   nextjs: "Next.js",
   react: "React",
+  vue: "Vue",
+  vite: "Vite",
   "vite-vue": "Vite/Vue",
   angular: "Angular",
   svelte: "Svelte",
@@ -46,7 +48,10 @@ function readPackageDependencies(directory: string): Set<string> {
 }
 
 function detectPackageManager(directory: string): string {
-  if (existsSync(join(directory, "bun.lockb")) || existsSync(join(directory, "bun.lock"))) {
+  if (
+    existsSync(join(directory, "bun.lockb")) ||
+    existsSync(join(directory, "bun.lock"))
+  ) {
     return "bun";
   }
   if (existsSync(join(directory, "pnpm-lock.yaml"))) {
@@ -62,27 +67,72 @@ function detectPackageManager(directory: string): string {
 }
 
 const LANGUAGE_DETECTORS: Detector[] = [
-  { id: "typescript", matches: (directory, dependencies) => existsSync(join(directory, "tsconfig.json")) || dependencies.has("typescript") },
-  { id: "javascript", matches: (directory) => existsSync(join(directory, "package.json")) },
+  {
+    id: "typescript",
+    matches: (directory, dependencies) =>
+      existsSync(join(directory, "tsconfig.json")) ||
+      dependencies.has("typescript"),
+  },
+  {
+    id: "javascript",
+    matches: (directory) => existsSync(join(directory, "package.json")),
+  },
   { id: "go", matches: (directory) => existsSync(join(directory, "go.mod")) },
-  { id: "rust", matches: (directory) => existsSync(join(directory, "Cargo.toml")) },
-  { id: "python", matches: (directory) => existsSync(join(directory, "pyproject.toml")) || existsSync(join(directory, "requirements.txt")) },
+  {
+    id: "rust",
+    matches: (directory) => existsSync(join(directory, "Cargo.toml")),
+  },
+  {
+    id: "python",
+    matches: (directory) =>
+      existsSync(join(directory, "pyproject.toml")) ||
+      existsSync(join(directory, "requirements.txt")),
+  },
 ];
 
 const FRAMEWORK_DETECTORS: Detector[] = [
-  { id: "nextjs", matches: (directory, dependencies) => dependencies.has("next") || existsSync(join(directory, "next.config.js")) || existsSync(join(directory, "next.config.ts")) },
-  { id: "react", matches: (_directory, dependencies) => dependencies.has("react") },
-  { id: "vite-vue", matches: (directory, dependencies) => dependencies.has("vue") || existsSync(join(directory, "vite.config.ts")) || existsSync(join(directory, "vite.config.js")) },
-  { id: "angular", matches: (_directory, dependencies) => dependencies.has("@angular/core") },
-  { id: "svelte", matches: (_directory, dependencies) => dependencies.has("svelte") },
+  {
+    id: "nextjs",
+    matches: (directory, dependencies) =>
+      dependencies.has("next") ||
+      existsSync(join(directory, "next.config.js")) ||
+      existsSync(join(directory, "next.config.ts")),
+  },
+  {
+    id: "react",
+    matches: (_directory, dependencies) => dependencies.has("react"),
+  },
+  {
+    id: "vue",
+    matches: (_directory, dependencies) => dependencies.has("vue"),
+  },
+  {
+    id: "vite",
+    matches: (directory, dependencies) =>
+      dependencies.has("vite") ||
+      existsSync(join(directory, "vite.config.ts")) ||
+      existsSync(join(directory, "vite.config.js")),
+  },
+  {
+    id: "angular",
+    matches: (_directory, dependencies) => dependencies.has("@angular/core"),
+  },
+  {
+    id: "svelte",
+    matches: (_directory, dependencies) => dependencies.has("svelte"),
+  },
 ];
 
 export function detectProjectFacts(directory: string): ProjectFacts {
   const dependencies = readPackageDependencies(directory);
   return {
     packageManager: detectPackageManager(directory),
-    languages: LANGUAGE_DETECTORS.filter((detector) => detector.matches(directory, dependencies)).map((detector) => detector.id),
-    frameworks: FRAMEWORK_DETECTORS.filter((detector) => detector.matches(directory, dependencies)).map((detector) => detector.id),
+    languages: LANGUAGE_DETECTORS.filter((detector) =>
+      detector.matches(directory, dependencies),
+    ).map((detector) => detector.id),
+    frameworks: FRAMEWORK_DETECTORS.filter((detector) =>
+      detector.matches(directory, dependencies),
+    ).map((detector) => detector.id),
   };
 }
 
@@ -91,5 +141,7 @@ export function getProjectFactLabel(id: string): string {
 }
 
 export function joinProjectFactLabels(ids: string[]): string {
-  return ids.length > 0 ? ids.map((id) => getProjectFactLabel(id)).join(", ") : "none detected";
+  return ids.length > 0
+    ? ids.map((id) => getProjectFactLabel(id)).join(", ")
+    : "none detected";
 }

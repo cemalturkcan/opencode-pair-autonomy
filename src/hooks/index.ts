@@ -1,7 +1,6 @@
 import type { PluginInput } from "@opencode-ai/plugin";
 import type { HarnessConfig } from "../types";
 import { createCommentGuardHook } from "./comment-guard";
-import { createIntentGateHook } from "./intent-gate";
 import { createFileEditedHook } from "./file-edited";
 import { createPostToolUseHook } from "./post-tool-use";
 import { createPreCompactHook } from "./pre-compact";
@@ -12,7 +11,6 @@ import { safeCreateHook, safeHook } from "./sdk";
 import { createSessionEndHook } from "./session-end";
 import { createSessionStartHook } from "./session-start";
 import { createStopHook } from "./stop";
-import { createTodoContinuationHook } from "./todo-continuation";
 
 type HookRecord = {
   config?: (config: any) => Promise<void>;
@@ -107,19 +105,6 @@ function composeConfig(hooks: HookRecord[]) {
   };
 }
 
-function composeChatHeaders(hooks: HookRecord[]) {
-  const active = hooks.map((hook) => hook["chat.headers"]).filter(Boolean);
-  if (active.length === 0) {
-    return undefined;
-  }
-
-  return async (input: any, output: any) => {
-    for (const hook of active) {
-      await hook?.(input, output);
-    }
-  };
-}
-
 function composeEvent(hooks: HookRecord[]) {
   const active = hooks.map((hook) => hook.event).filter(Boolean);
   if (active.length === 0) {
@@ -201,19 +186,8 @@ export async function createHarnessHooks(
     }
   };
 
-  registerHook("intent_gate", config.hooks?.intent_gate !== false, () =>
-    createIntentGateHook(ctx),
-  );
-  registerHook(
-    "todo_continuation",
-    config.hooks?.todo_continuation !== false,
-    () =>
-      createTodoContinuationHook(
-        ctx,
-        config.hooks?.todo_continuation_cooldown_ms ?? 30000,
-        config.hooks?.flush_queued_prompts !== false,
-      ),
-  );
+  // intent-gate removed: coordinator architecture doesn't need intent classification
+  // todo-continuation removed: coordinator handles execution flow directly
   registerHook("comment_guard", config.hooks?.comment_guard !== false, () =>
     createCommentGuardHook(),
   );
@@ -239,8 +213,6 @@ export async function createHarnessHooks(
     createFileEditedHook(runtime),
   );
 
-  // Prompt refiner uses experimental hooks that bypass the standard HookRecord pipeline.
-  // It creates its own session internally, so it registers separately.
   let promptRefinerHooks:
     | ReturnType<typeof createPromptRefinerHook>
     | undefined;
@@ -248,14 +220,14 @@ export async function createHarnessHooks(
     try {
       promptRefinerHooks = createPromptRefinerHook(ctx);
     } catch {
-      // swallow – prompt refiner is non-critical
+      // swallow
     }
   }
 
   return {
     config: composeConfig(hooks),
     "chat.message": composeChatMessage(hooks),
-    "chat.headers": composeChatHeaders(hooks),
+    "chat.headers": undefined,
     event: composeEvent(hooks),
     "tool.execute.before": composeToolBefore(hooks),
     "tool.execute.after": composeToolAfter(hooks),

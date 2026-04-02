@@ -4,12 +4,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { parse, type ParseError } from "jsonc-parser";
 import { z } from "zod";
 import type { HarnessConfig } from "./types";
-import { deepMerge } from "./utils";
+import { deepMerge, isObject } from "./utils";
 
 const HarnessConfigSchema = z.object({
-  default_mode: z
-    .enum(["pair", "autonomous", "reviewer", "web-search", "ui-developer"])
-    .optional(),
+  default_mode: z.enum(["coordinator"]).optional(),
   set_default_agent: z.boolean().optional(),
   commands: z
     .object({
@@ -30,8 +28,6 @@ const HarnessConfigSchema = z.object({
   hooks: z
     .object({
       profile: z.enum(["minimal", "standard", "strict"]).optional(),
-      intent_gate: z.boolean().optional(),
-      todo_continuation: z.boolean().optional(),
       comment_guard: z.boolean().optional(),
       session_start: z.boolean().optional(),
       pre_tool_use: z.boolean().optional(),
@@ -40,9 +36,7 @@ const HarnessConfigSchema = z.object({
       stop: z.boolean().optional(),
       session_end: z.boolean().optional(),
       file_edited: z.boolean().optional(),
-      flush_queued_prompts: z.boolean().optional(),
       prompt_refiner: z.boolean().optional(),
-      todo_continuation_cooldown_ms: z.number().int().positive().optional(),
     })
     .optional(),
   memory: z
@@ -75,6 +69,7 @@ const HarnessConfigSchema = z.object({
       sudo_mcp: z.boolean().optional(),
       jina: z.boolean().optional(),
       figma_console: z.boolean().optional(),
+      mariadb: z.boolean().optional(),
     })
     .optional(),
   agents: z
@@ -91,15 +86,13 @@ const HarnessConfigSchema = z.object({
 });
 
 const DEFAULTS: HarnessConfig = {
-  default_mode: "pair",
+  default_mode: "coordinator",
   set_default_agent: true,
   commands: {
     enabled: true,
   },
   hooks: {
     profile: "standard",
-    intent_gate: false,
-    todo_continuation: false,
     comment_guard: true,
     session_start: true,
     pre_tool_use: true,
@@ -108,9 +101,7 @@ const DEFAULTS: HarnessConfig = {
     stop: true,
     session_end: true,
     file_edited: true,
-    flush_queued_prompts: false,
     prompt_refiner: false,
-    todo_continuation_cooldown_ms: 30000,
   },
   memory: {
     enabled: true,
@@ -135,6 +126,7 @@ const DEFAULTS: HarnessConfig = {
     sudo_mcp: false,
     jina: true,
     figma_console: true,
+    mariadb: true,
   },
   agents: {},
 };
@@ -152,10 +144,6 @@ const ConfigSectionSchemas = {
   agents: HarnessConfigSchema.shape.agents,
 } satisfies Record<keyof HarnessConfig, z.ZodTypeAny>;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function formatParseErrors(errors: ParseError[]): string {
   return errors
     .map((error) => `offset ${error.offset}: code ${error.error}`)
@@ -170,7 +158,7 @@ function parseConfigPartially(
   parsed: unknown,
   filePath: string,
 ): HarnessConfig {
-  if (!isRecord(parsed)) {
+  if (!isObject(parsed)) {
     logConfigWarning(filePath, "Ignoring config because it is not an object");
     return {};
   }
@@ -251,7 +239,7 @@ export function loadHarnessConfig(projectDirectory: string): HarnessConfig {
 
 export const SAMPLE_PROJECT_CONFIG = `{
   // Project-level overrides for opencode-pair-autonomy
-  "default_mode": "pair",
+  "default_mode": "coordinator",
   "credentials": {
     "jina_api_key": "",
     "figma_access_token": ""
@@ -261,8 +249,6 @@ export const SAMPLE_PROJECT_CONFIG = `{
   },
   "hooks": {
     "profile": "standard",
-    "intent_gate": false,
-    "todo_continuation": false,
     "comment_guard": true,
     "session_start": true,
     "pre_tool_use": true,
@@ -271,9 +257,7 @@ export const SAMPLE_PROJECT_CONFIG = `{
     "stop": true,
     "session_end": true,
     "file_edited": true,
-    "flush_queued_prompts": false,
-    "prompt_refiner": false,
-    "todo_continuation_cooldown_ms": 30000
+    "prompt_refiner": false
   },
   "memory": {
     "enabled": true,
@@ -297,7 +281,8 @@ export const SAMPLE_PROJECT_CONFIG = `{
     "ssh_mcp": true,
     "sudo_mcp": false,
     "jina": true,
-    "figma_console": true
+    "figma_console": true,
+    "mariadb": true
   },
   "agents": {}
 }`;

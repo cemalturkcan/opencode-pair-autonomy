@@ -64,25 +64,9 @@ export function createPostToolUseHook(
         && tool === "edit"
         && profileMatches(profile, ["standard", "strict"])
         && /\.(ts|tsx|js|jsx|json|md)$/i.test(filePath)
+        && !/[/\\](node_modules|dist|build)[/\\]/.test(filePath)
       ) {
         await runCommand("bun", ["x", "prettier", "--write", filePath], ctx.directory).catch(() => undefined);
-      }
-
-      if (tool === "edit" && filePath && profileMatches(profile, ["standard", "strict"]) && /\.tsx?$/i.test(filePath)) {
-        const result = await runCommand("bun", ["x", "tsc", "--noEmit"], ctx.directory).catch(() => "");
-        if (result) {
-          const preview = result.split("\n").slice(0, 5).join("\n");
-          if (preview) {
-            runtime.appendObservation({
-              timestamp: new Date().toISOString(),
-              phase: "post",
-              sessionID,
-              agent: sessionID ? runtime.getSessionAgent(sessionID) : undefined,
-              tool,
-              note: "typescript_check_reported",
-            });
-          }
-        }
       }
 
       if (tool === "bash" && profileMatches(profile, ["standard", "strict"])) {
