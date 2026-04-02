@@ -47,7 +47,7 @@ const PairAutonomyPlugin: Plugin = async (ctx) => {
       };
 
       if (harnessConfig.set_default_agent !== false) {
-        mutableConfig.default_agent = "ryo";
+        mutableConfig.default_agent = "yang";
       }
 
       await hooks.config?.(config);

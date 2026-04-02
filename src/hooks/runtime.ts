@@ -92,7 +92,7 @@ export function profileMatches(
  * Subagents spawned via Task tool should NOT get previous-session context
  * injected into their system prompt — it causes session mixing.
  */
-export const PRIMARY_AGENTS = new Set(["ryo"]);
+export const PRIMARY_AGENTS = new Set(["yang", "yang-exp"]);
 
 /**
  * Resolve a session ID from a hook input object.

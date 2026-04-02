@@ -47,7 +47,7 @@ function printConfig(): void {
   "instructions": [
     "~/.config/opencode/plugin/shell-strategy/shell_strategy.md"
   ],
-  "default_agent": "ryo"
+  "default_agent": "yang"
 }
 
 Use \`opencode-pair-autonomy install\` for the real path-aware install.`);
