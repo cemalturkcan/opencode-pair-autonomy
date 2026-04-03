@@ -24,18 +24,12 @@ const PLAN_MODE_ALLOWED_AGENTS = new Set([
   "rajdhani",
 ]);
 
-function isWorkerSpawnTool(tool: string): boolean {
-  return (
-    tool === "task" ||
-    tool.startsWith("task_") ||
-    tool === "delegate" ||
-    tool.startsWith("delegate")
-  );
-}
-
 function resolveTargetAgent(args: Record<string, unknown>): string | undefined {
   if (typeof args.subagent_type === "string") return args.subagent_type;
   if (typeof args.agent === "string") return args.agent;
+  if (typeof args.subagent === "string") return args.subagent;
+  // Deep check: some tools nest agent in prompt or description objects
+  if (typeof args.type === "string") return args.type;
   return undefined;
 }
 
@@ -43,10 +37,28 @@ function isBlockedInPlanMode(
   tool: string,
   args: Record<string, unknown>,
 ): boolean {
+  // edit/write/patch always blocked
   if (PLAN_MODE_ALWAYS_BLOCKED.has(tool)) return true;
-  if (!isWorkerSpawnTool(tool)) return false;
+
+  // If args contain a target agent, this is a worker-spawn call
   const target = resolveTargetAgent(args);
-  return !(target && PLAN_MODE_ALLOWED_AGENTS.has(target));
+  if (target) {
+    return !PLAN_MODE_ALLOWED_AGENTS.has(target);
+  }
+
+  // No target agent in args — check tool name patterns as fallback
+  if (
+    tool === "task" ||
+    tool.startsWith("task_") ||
+    tool === "delegate" ||
+    tool.startsWith("delegate")
+  ) {
+    // Worker-spawn tool but couldn't determine target — block to be safe
+    return true;
+  }
+
+  // Regular tool (read, glob, grep, bash, etc.)
+  return false;
 }
 
 function isNodeCommand(command: string): boolean {
