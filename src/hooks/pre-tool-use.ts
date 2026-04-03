@@ -17,8 +17,26 @@ const NODE_MODULES_BIN_RE = /node_modules\/\.bin\//;
 
 const PLAN_MODE_BLOCKED_TOOLS = new Set(["task", "edit", "write", "patch"]);
 
-function isAgentOrTaskTool(tool: string): boolean {
-  return tool === "task" || tool.startsWith("task_");
+const PLAN_MODE_ALLOWED_AGENTS = new Set([
+  "ginko",
+  "kaiki",
+  "odokawa",
+  "rajdhani",
+]);
+
+function isBlockedTaskInPlanMode(
+  tool: string,
+  args: Record<string, unknown>,
+): boolean {
+  if (tool !== "task" && !tool.startsWith("task_")) return false;
+  const target =
+    typeof args.subagent_type === "string"
+      ? args.subagent_type
+      : typeof args.agent === "string"
+        ? args.agent
+        : undefined;
+  if (target && PLAN_MODE_ALLOWED_AGENTS.has(target)) return false;
+  return true;
 }
 
 function isNodeCommand(command: string): boolean {
@@ -70,7 +88,8 @@ export function createPreToolUseHook(
         runtime.getPlanMode(sessionID) === "planning"
       ) {
         const blocked =
-          PLAN_MODE_BLOCKED_TOOLS.has(tool) || isAgentOrTaskTool(tool);
+          PLAN_MODE_BLOCKED_TOOLS.has(tool) ||
+          isBlockedTaskInPlanMode(tool, args);
 
         if (blocked) {
           const count = runtime.incrementPlanModeBlock(sessionID);
