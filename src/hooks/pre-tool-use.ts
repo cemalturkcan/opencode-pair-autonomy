@@ -57,22 +57,18 @@ function isBlockedInPlanMode(
   // edit/write/patch always blocked
   if (PLAN_MODE_ALWAYS_BLOCKED.has(tool)) return true;
 
+  // delegate is always safe — restricted to read-only agents by design
+  // (hook doesn't receive delegate args, so we can't check target)
+  if (tool === "delegate" || tool.startsWith("delegation")) return false;
+
   // If args contain a target agent, this is a worker-spawn call
   const target = resolveTargetAgent(args);
   if (target) {
     return !PLAN_MODE_ALLOWED_AGENTS.has(target);
   }
 
-  // No target agent in args — check tool name patterns as fallback
-  if (
-    tool === "task" ||
-    tool.startsWith("task_") ||
-    tool === "delegate" ||
-    tool.startsWith("delegate")
-  ) {
-    // Worker-spawn tool but couldn't determine target — block to be safe
-    return true;
-  }
+  // task tool without determinable target — block to be safe
+  if (tool === "task" || tool.startsWith("task_")) return true;
 
   // Regular tool (read, glob, grep, bash, etc.)
   return false;
