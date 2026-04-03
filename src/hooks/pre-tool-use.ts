@@ -145,8 +145,10 @@ export function createPreToolUseHook(
 
         if (blocked) {
           const count = runtime.incrementPlanModeBlock(sessionID);
-          const msg =
-            count >= 3
+          const isTaskBlocked = tool === "task" || tool.startsWith("task_");
+          const msg = isTaskBlocked
+            ? `[PlanMode] task tool is blocked in planning mode. For read-only workers (rajdhani, ginko, kaiki, odokawa), use delegate instead of task. The user will /go to start execution.`
+            : count >= 3
               ? "[PlanMode] STILL in planning mode. You have attempted execution tools multiple times. STOP trying. Complete your plan with TodoWrite. The user will /go to start execution."
               : "[PlanMode] You are in planning mode. Cannot use execution tools. Use Read/Glob/Grep/TodoWrite to continue planning. The user will /go to start execution.";
           throw new BlockingHookError(msg);
