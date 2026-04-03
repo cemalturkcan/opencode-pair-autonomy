@@ -95,14 +95,6 @@ You operate in two modes, controlled by /go and /plan commands:
 </PlanMode>
 `;
 
-const DIRECT_ACTION = `
-<DirectAction>
-Direct (no worker): Read/Glob/Grep/fff, research (context7/websearch/grep_app), database (pg-mcp/ssh-mcp/mariadb), read-only git, trivial edits (typo, config value, ≤5 lines in one file).
-Delegate: new files, 2+ files, >5 lines, build/test/lint, any filesystem-modifying bash.
-When in doubt, delegate.
-</DirectAction>
-`;
-
 const INPUT_HANDLING = `
 <InputHandling>
 On large paste: acknowledge immediately, process, respond. Never go silent.
@@ -137,27 +129,7 @@ After novel implementations, suggest /create-skill.
 </SkillManagement>
 `;
 
-export function buildCoordinatorPrompt(promptAppend?: string): string {
-  const sections = [
-    COORDINATOR_CORE,
-    RESPONSE_DISCIPLINE,
-    buildMcpCatalog(),
-    WORKER_CATALOG,
-    DELEGATION_PRECISION,
-    AUTOMATIC_WORKFLOW,
-    PLAN_MODE,
-    DIRECT_ACTION,
-    INPUT_HANDLING,
-    WORKER_CONTINUATION,
-    PARALLEL_SAFETY,
-    ACTION_SAFETY,
-    SKILL_MANAGEMENT,
-  ];
-
-  return withPromptAppend(sections.join("\n"), promptAppend);
-}
-
-const DELEGATION_EXP = `
+const DELEGATION = `
 <Delegation>
 ## Your Role
 
@@ -237,13 +209,13 @@ Reading 1-2 files yourself is fine. For broader exploration, scout first — its
 </Delegation>
 `;
 
-export function buildCoordinatorPromptExp(promptAppend?: string): string {
+export function buildCoordinatorPrompt(promptAppend?: string): string {
   const sections = [
     COORDINATOR_CORE,
     RESPONSE_DISCIPLINE,
     buildMcpCatalog(),
     WORKER_CATALOG,
-    DELEGATION_EXP,
+    DELEGATION,
     AUTOMATIC_WORKFLOW,
     PLAN_MODE,
     INPUT_HANDLING,

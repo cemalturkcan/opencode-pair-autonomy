@@ -1,9 +1,6 @@
 import type { AgentLike, HarnessConfig } from "./types";
 import { deepMerge } from "./utils";
-import {
-  buildCoordinatorPrompt,
-  buildCoordinatorPromptExp,
-} from "./prompts/coordinator";
+import { buildCoordinatorPrompt } from "./prompts/coordinator";
 import {
   buildWorkerPrompt,
   buildResearcherPrompt,
@@ -51,9 +48,7 @@ const COORDINATOR_DISABLED_TOOLS: Record<string, string> = {
 };
 
 // Per-worker MCP restrictions: disable MCPs they don't need.
-function mcpDenyRules(
-  ...disabledPrefixes: string[]
-): Record<string, string> {
+function mcpDenyRules(...disabledPrefixes: string[]): Record<string, string> {
   const tools: Record<string, string> = {};
   for (const prefix of disabledPrefixes) {
     tools[`${prefix}_*`] = "deny";
@@ -81,21 +76,6 @@ export function createHarnessAgents(
         permission: { task: COORDINATOR_TASK_PERMISSIONS },
       },
       overrides.yang,
-    ),
-
-    "yang-exp": withOverride(
-      {
-        mode: "primary",
-        description:
-          "Yang Wenli (Experimental) — Judgment-based delegation coordinator.",
-        model: "anthropic/claude-opus-4-6",
-        variant: "max",
-        prompt: buildCoordinatorPromptExp(overrides["yang-exp"]?.prompt_append),
-        color: "#7B68EE",
-        tools: COORDINATOR_DISABLED_TOOLS,
-        permission: { task: COORDINATOR_TASK_PERMISSIONS },
-      },
-      overrides["yang-exp"],
     ),
 
     // ── Workers (subagents) ──────────────────────────────────────

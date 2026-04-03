@@ -94,11 +94,11 @@ export function profileMatches(
 }
 
 /**
- * Primary (user-facing) agents that should receive session-context injection.
+ * Primary (user-facing) agent that should receive session-context injection.
  * Subagents spawned via Task tool should NOT get previous-session context
  * injected into their system prompt — it causes session mixing.
  */
-export const PRIMARY_AGENTS = new Set(["yang", "yang-exp"]);
+export const PRIMARY_AGENTS = new Set(["yang"]);
 
 /**
  * Resolve a session ID from a hook input object.

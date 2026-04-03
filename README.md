@@ -1,4 +1,4 @@
-# oh-my-pair-code
+# opencode-pair-autonomy
 
 OpenCode harness with opinionated agent orchestration. One coordinator, eight specialized workers, automatic verify+review pipeline.
 
@@ -13,17 +13,17 @@ OpenCode harness with opinionated agent orchestration. One coordinator, eight sp
 
 ## Agents
 
-| Agent | Role | Model |
-|-------|------|-------|
-| **Yang** | Coordinator — plans, argues, delegates | claude-opus-4-6 |
-| **Thorfinn** | General implementation | claude-sonnet-4-6 |
-| **Ginko** | Web and doc research | claude-sonnet-4-6 |
-| **Kaiki** | Senior code review (read-only) | claude-opus-4-6 |
-| **Odokawa** | Cross-model review (read-only) | gpt-5.4 |
-| **Ozen** | Build, test, lint verification | claude-sonnet-4-6 |
-| **Skull Knight** | Scoped failure repair | claude-sonnet-4-6 |
-| **Paprika** | Frontend, Figma, browser testing | claude-sonnet-4-6 |
-| **Rajdhani** | Fast codebase exploration | claude-sonnet-4-6 |
+| Agent            | Role                                   | Model             |
+| ---------------- | -------------------------------------- | ----------------- |
+| **Yang**         | Coordinator — plans, argues, delegates | claude-opus-4-6   |
+| **Thorfinn**     | General implementation                 | claude-sonnet-4-6 |
+| **Ginko**        | Web and doc research                   | claude-sonnet-4-6 |
+| **Kaiki**        | Senior code review (read-only)         | claude-opus-4-6   |
+| **Odokawa**      | Cross-model review (read-only)         | gpt-5.4           |
+| **Ozen**         | Build, test, lint verification         | claude-sonnet-4-6 |
+| **Skull Knight** | Scoped failure repair                  | claude-sonnet-4-6 |
+| **Paprika**      | Frontend, Figma, browser testing       | claude-sonnet-4-6 |
+| **Rajdhani**     | Fast codebase exploration              | claude-sonnet-4-6 |
 
 ## MCP Servers
 
@@ -32,14 +32,14 @@ OpenCode harness with opinionated agent orchestration. One coordinator, eight sp
 ## Quick start
 
 ```bash
-bunx --bun github:cemalturkcan/oh-my-pair-code install
+bunx opencode-pair-autonomy install
 ```
 
 From source:
 
 ```bash
-git clone https://github.com/cemalturkcan/oh-my-pair-code.git
-cd oh-my-pair-code
+git clone https://github.com/cemalturkcan/opencode-pair-autonomy.git
+cd opencode-pair-autonomy
 bun install && bun run build && bun link
 opencode-pair-autonomy install
 ```
@@ -69,14 +69,14 @@ opencode-pair-autonomy init
 
 ## Hooks
 
-| Hook | What it does |
-|------|-------------|
-| `session.created` | Prepare session context injection |
-| `chat.message` | Inject mode, project docs, session memory (coordinator) or project facts (workers) |
-| `tool.execute.before` | Plan mode gate, long-running command detection |
-| `tool.execute.after` | Comment guard, file tracking, compact suggestions |
-| `session.idle` | Save session summary, promote learned patterns, cleanup old sessions |
-| `session.compacting` | Pre-compact observation snapshot |
+| Hook                  | What it does                                                                       |
+| --------------------- | ---------------------------------------------------------------------------------- |
+| `session.created`     | Prepare session context injection                                                  |
+| `chat.message`        | Inject mode, project docs, session memory (coordinator) or project facts (workers) |
+| `tool.execute.before` | Plan mode gate, long-running command detection                                     |
+| `tool.execute.after`  | Comment guard, file tracking, compact suggestions                                  |
+| `session.idle`        | Save session summary, promote learned patterns, cleanup old sessions               |
+| `session.compacting`  | Pre-compact observation snapshot                                                   |
 
 ## What install changes
 
