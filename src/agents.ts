@@ -137,7 +137,6 @@ export function createHarnessAgents(
         ),
         permission: {
           edit: "deny",
-          bash: { "*": "deny" },
         },
       },
       overrides.kaiki,
@@ -165,7 +164,6 @@ export function createHarnessAgents(
         ),
         permission: {
           edit: "deny",
-          bash: { "*": "deny" },
         },
       },
       overrides.odokawa,

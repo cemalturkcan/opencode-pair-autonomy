@@ -1,5 +1,4 @@
 import {
-  chmodSync,
   mkdirSync,
   existsSync,
   readFileSync,
@@ -18,16 +17,6 @@ import { createInterface } from "node:readline";
 import { SAMPLE_PROJECT_CONFIG } from "./config";
 
 type JsonRecord = Record<string, unknown>;
-
-type GitHubReleaseAsset = {
-  name?: string;
-  browser_download_url?: string;
-};
-
-type GitHubRelease = {
-  tag_name?: string;
-  assets?: GitHubReleaseAsset[];
-};
 
 /**
  * npm package names used as plugin entries in opencode.json.
@@ -562,6 +551,8 @@ function writeHarnessConfig(
     merged.figma_console = {};
   }
 
+  delete (merged.mcps as Record<string, unknown>).fff;
+
   writeJson(filePath, merged);
 }
 
@@ -601,86 +592,6 @@ async function fetchText(url: string): Promise<string> {
     throw new Error(`Failed to fetch ${url}: ${response.status}`);
   }
   return await response.text();
-}
-
-async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      ...(process.env.GITHUB_TOKEN
-        ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
-        : {}),
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to fetch ${url}: ${response.status}`);
-  }
-  return (await response.json()) as T;
-}
-
-function resolveFffReleaseTarget(): string | undefined {
-  if (process.platform === "linux" && process.arch === "x64") {
-    return "x86_64-unknown-linux-musl";
-  }
-  if (process.platform === "linux" && process.arch === "arm64") {
-    return "aarch64-unknown-linux-musl";
-  }
-  if (process.platform === "darwin" && process.arch === "x64") {
-    return "x86_64-apple-darwin";
-  }
-  if (process.platform === "darwin" && process.arch === "arm64") {
-    return "aarch64-apple-darwin";
-  }
-  if (process.platform === "win32" && process.arch === "x64") {
-    return "x86_64-pc-windows-msvc.exe";
-  }
-  if (process.platform === "win32" && process.arch === "arm64") {
-    return "aarch64-pc-windows-msvc.exe";
-  }
-  return undefined;
-}
-
-async function installFffMcp(binDir: string): Promise<void> {
-  const target = resolveFffReleaseTarget();
-  if (!target) {
-    console.warn(
-      `[opencode-pair-autonomy] Skipping fff-mcp install: unsupported platform ${process.platform}/${process.arch}`,
-    );
-    return;
-  }
-
-  const release = await fetchJson<GitHubRelease>(
-    "https://api.github.com/repos/dmtrKovalenko/fff.nvim/releases/latest",
-  );
-  const expectedName = `fff-mcp-${target}`;
-  const asset = release.assets?.find(
-    (entry) =>
-      entry.name === expectedName &&
-      typeof entry.browser_download_url === "string",
-  );
-
-  if (!asset?.browser_download_url) {
-    throw new Error(
-      `Could not find a matching fff-mcp release asset for target ${target}`,
-    );
-  }
-
-  const response = await fetch(asset.browser_download_url);
-  if (!response.ok) {
-    throw new Error(
-      `Failed to download ${asset.browser_download_url}: ${response.status}`,
-    );
-  }
-
-  const outputPath = join(
-    binDir,
-    process.platform === "win32" ? "fff-mcp.exe" : "fff-mcp",
-  );
-  ensureDir(binDir);
-  writeFileSync(outputPath, Buffer.from(await response.arrayBuffer()));
-  if (process.platform !== "win32") {
-    chmodSync(outputPath, 0o755);
-  }
 }
 
 async function installBackgroundAgentsVendor(vendorDir: string): Promise<void> {
@@ -991,13 +902,6 @@ export async function installHarness(options?: { fresh?: boolean }): Promise<{
   );
   await installShellStrategyInstruction(paths.shellStrategyDir);
   await installBackgroundAgentsVendor(paths.vendorDir);
-  try {
-    await installFffMcp(paths.binDir);
-  } catch (error) {
-    console.warn(
-      `[opencode-pair-autonomy] Failed to install fff-mcp automatically: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
   installSelfContainedMcps(paths.vendorMcpDir, { fresh: options?.fresh });
   installBundledSkills(paths.skillsDir);
   const configPath = updateConfig(paths);

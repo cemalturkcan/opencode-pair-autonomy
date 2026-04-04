@@ -27,7 +27,7 @@ OpenCode harness with opinionated agent orchestration. One coordinator, eight sp
 
 ## MCP Servers
 
-`context7`, `grep_app`, `websearch`, `fff`, `jina`, `web-agent-mcp`, `figma-console`, `pg-mcp`, `ssh-mcp`, `mariadb`
+`context7`, `grep_app`, `websearch`, `jina`, `web-agent-mcp`, `figma-console`, `pg-mcp`, `ssh-mcp`, `mariadb`
 
 ## Quick start
 
@@ -81,7 +81,7 @@ opencode-pair-autonomy init
 ## What install changes
 
 - Patches OpenCode config with harness agents, MCPs, and commands
-- Installs `fff-mcp` binary, shell strategy instructions
+- Installs shell strategy instructions
 - Vendors `pg-mcp`, `ssh-mcp`, bundled skills
 - Preserves existing user config on normal install
 

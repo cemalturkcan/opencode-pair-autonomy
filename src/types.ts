@@ -31,7 +31,6 @@ export type McpToggles = {
   context7?: boolean;
   grep_app?: boolean;
   websearch?: boolean;
-  fff?: boolean;
   web_agent_mcp?: boolean;
   pg_mcp?: boolean;
   ssh_mcp?: boolean;

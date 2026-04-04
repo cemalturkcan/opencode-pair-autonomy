@@ -99,24 +99,6 @@ function commandExistsInPath(command: string): boolean {
     );
 }
 
-function resolveFffCommand(): string[] {
-  const configured = process.env.FFF_MCP_PATH?.trim();
-  if (configured) {
-    return [configured];
-  }
-
-  const bundled = join(
-    binRoot(),
-    process.platform === "win32" ? "fff-mcp.exe" : "fff-mcp",
-  );
-  if (existsSync(bundled)) {
-    return [bundled];
-  }
-
-  const fallback = process.platform === "win32" ? "fff-mcp.exe" : "fff-mcp";
-  return commandExistsInPath(fallback) ? [fallback] : [];
-}
-
 export function createHarnessMcps(
   config: HarnessConfig,
 ): Record<string, McpConfig> {
@@ -160,18 +142,6 @@ export function createHarnessMcps(
       oauth: false,
       timeout: 60000,
     };
-  }
-
-  if (toggles.fff !== false) {
-    const command = resolveFffCommand();
-    if (command.length > 0) {
-      result.fff = {
-        type: "local",
-        command,
-        enabled: true,
-        timeout: 60000,
-      };
-    }
   }
 
   if (toggles.web_agent_mcp !== false) {

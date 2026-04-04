@@ -14364,12 +14364,13 @@ var HarnessConfigSchema = exports_external.object({
   }).optional(),
   credentials: exports_external.object({
     jina_api_key: exports_external.string().optional(),
-    figma_api_key: exports_external.string().optional()
+    figma_access_token: exports_external.string().optional()
+  }).optional(),
+  figma_console: exports_external.object({
+    ssh_host: exports_external.string().optional()
   }).optional(),
   hooks: exports_external.object({
     profile: exports_external.enum(["minimal", "standard", "strict"]).optional(),
-    intent_gate: exports_external.boolean().optional(),
-    todo_continuation: exports_external.boolean().optional(),
     comment_guard: exports_external.boolean().optional(),
     session_start: exports_external.boolean().optional(),
     pre_tool_use: exports_external.boolean().optional(),
@@ -14378,9 +14379,7 @@ var HarnessConfigSchema = exports_external.object({
     stop: exports_external.boolean().optional(),
     session_end: exports_external.boolean().optional(),
     file_edited: exports_external.boolean().optional(),
-    flush_queued_prompts: exports_external.boolean().optional(),
-    prompt_refiner: exports_external.boolean().optional(),
-    todo_continuation_cooldown_ms: exports_external.number().int().positive().optional()
+    prompt_refiner: exports_external.boolean().optional()
   }).optional(),
   memory: exports_external.object({
     enabled: exports_external.boolean().optional(),
@@ -14400,13 +14399,13 @@ var HarnessConfigSchema = exports_external.object({
     context7: exports_external.boolean().optional(),
     grep_app: exports_external.boolean().optional(),
     websearch: exports_external.boolean().optional(),
-    fff: exports_external.boolean().optional(),
     web_agent_mcp: exports_external.boolean().optional(),
     pg_mcp: exports_external.boolean().optional(),
     ssh_mcp: exports_external.boolean().optional(),
     sudo_mcp: exports_external.boolean().optional(),
     jina: exports_external.boolean().optional(),
-    figma: exports_external.boolean().optional()
+    figma_console: exports_external.boolean().optional(),
+    mariadb: exports_external.boolean().optional()
   }).optional(),
   agents: exports_external.record(exports_external.string(), exports_external.object({
     model: exports_external.string().optional(),
@@ -14423,6 +14422,7 @@ var ConfigSectionSchemas = {
   hooks: HarnessConfigSchema.shape.hooks,
   memory: HarnessConfigSchema.shape.memory,
   learning: HarnessConfigSchema.shape.learning,
+  figma_console: HarnessConfigSchema.shape.figma_console,
   mcps: HarnessConfigSchema.shape.mcps,
   agents: HarnessConfigSchema.shape.agents
 };
@@ -14431,12 +14431,13 @@ var SAMPLE_PROJECT_CONFIG = `{
   "default_mode": "coordinator",
   "credentials": {
     "jina_api_key": "",
-    "figma_api_key": ""
+    "figma_access_token": ""
+  },
+  "figma_console": {
+    "ssh_host": ""
   },
   "hooks": {
     "profile": "standard",
-    "intent_gate": false,
-    "todo_continuation": false,
     "comment_guard": true,
     "session_start": true,
     "pre_tool_use": true,
@@ -14445,9 +14446,7 @@ var SAMPLE_PROJECT_CONFIG = `{
     "stop": true,
     "session_end": true,
     "file_edited": true,
-    "flush_queued_prompts": false,
-    "prompt_refiner": false,
-    "todo_continuation_cooldown_ms": 30000
+    "prompt_refiner": false
   },
   "memory": {
     "enabled": true,
@@ -14465,42 +14464,19 @@ var SAMPLE_PROJECT_CONFIG = `{
     "context7": true,
     "grep_app": true,
     "websearch": true,
-    "fff": true,
     "web_agent_mcp": true,
     "pg_mcp": true,
     "ssh_mcp": true,
     "sudo_mcp": false,
     "jina": true,
-    "figma": true
+    "figma_console": true,
+    "mariadb": true
   },
-  "agents": {
-    "pair": {
-      "variant": "high"
-    },
-    "pair-plan": {
-      "variant": "high"
-    },
-    "autonomous": {
-      "variant": "high"
-    },
-    "repo-scout-fast": {
-      "model": "kimi-for-coding/k2p5"
-    },
-    "repo-scout-deep": {
-      "model": "kimi-for-coding/kimi-k2-thinking"
-    },
-    "researcher-fast": {
-      "model": "kimi-for-coding/k2p5"
-    },
-    "researcher-deep": {
-      "model": "kimi-for-coding/kimi-k2-thinking"
-    }
-  }
+  "agents": {}
 }`;
 
 // src/installer.ts
 import {
-  chmodSync,
   mkdirSync,
   existsSync,
   readFileSync,
@@ -14516,24 +14492,24 @@ import { fileURLToPath } from "url";
 import { spawn } from "child_process";
 import { createInterface } from "readline";
 var MANAGED_PLUGIN_ENTRIES = [
-  "@tarquinen/opencode-dcp",
   "@zenobius/opencode-skillful",
   "@franlol/opencode-md-table-formatter",
   "opencode-pty",
+  "@mohak34/opencode-notifier",
   "opencode-anthropic-login-via-cli"
 ];
 var MANAGED_PACKAGE_NAMES = [
   "opencode-pair-autonomy",
   "opencode-pty",
+  "@mohak34/opencode-notifier",
   "@zenobius/opencode-skillful",
-  "@tarquinen/opencode-dcp",
   "@franlol/opencode-md-table-formatter",
   "opencode-anthropic-login-via-cli"
 ];
 var PACKAGE_SPECS = {
   "opencode-pty": "latest",
+  "@mohak34/opencode-notifier": "latest",
   "@zenobius/opencode-skillful": "latest",
-  "@tarquinen/opencode-dcp": "latest",
   "@franlol/opencode-md-table-formatter": "latest",
   "opencode-anthropic-login-via-cli": "latest",
   "unique-names-generator": "latest",
@@ -14570,10 +14546,10 @@ function getConfigPaths(configDir) {
     configJsonc: join(configDir, "opencode.jsonc"),
     packageJson: join(configDir, "package.json"),
     harnessConfig: join(configDir, "opencode-pair-autonomy.jsonc"),
-    dcpConfig: join(configDir, "dcp.jsonc"),
     vendorDir: join(configDir, "vendor", "opencode-background-agents-local"),
     vendorMcpDir: join(configDir, "vendor", "mcp"),
-    shellStrategyDir: join(configDir, "plugin", "shell-strategy")
+    shellStrategyDir: join(configDir, "plugin", "shell-strategy"),
+    notifierConfig: join(configDir, "opencode-notifier.json")
   };
 }
 function bundledMcpSourceRoot(name) {
@@ -14773,12 +14749,45 @@ function forceAllowPermissions(config2) {
   normalizeLegacyRuleset(config2);
   config2.permission = "allow";
 }
-function readExistingFigmaApiKey(harnessConfigPath) {
+function readExistingJinaApiKey(harnessConfigPath) {
   const existingHarness = readJsonLike(harnessConfigPath);
-  const key = existingHarness.credentials?.figma_api_key;
+  const harnessKey = normalizeJinaApiKey(existingHarness.credentials?.jina_api_key);
+  if (harnessKey) {
+    return harnessKey;
+  }
+  const currentConfig = readJsonLike(detectMainConfigPath(getConfigPaths(getConfigDir())).path);
+  const bearer = currentConfig.mcp?.jina?.headers;
+  return normalizeJinaApiKey(bearer?.Authorization);
+}
+async function promptForJinaApiKey(existing) {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return existing;
+  }
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const suffix = existing ? " (press Enter to reuse existing value)" : "";
+    const answer = await new Promise((resolveQuestion, rejectQuestion) => {
+      rl.question(`Enter Jina API key${suffix}: `, (value) => resolveQuestion(value));
+      rl.once("error", rejectQuestion);
+    });
+    const normalized = normalizeJinaApiKey(answer);
+    return normalized ?? existing;
+  } finally {
+    rl.close();
+  }
+}
+function readExistingFigmaAccessToken(harnessConfigPath) {
+  const existingHarness = readJsonLike(harnessConfigPath);
+  const creds = existingHarness.credentials;
+  const key = creds?.figma_access_token ?? creds?.figma_api_key;
   return key?.trim() || undefined;
 }
-async function promptForFigmaApiKey(existing) {
+function readExistingFigmaConsoleSshHost(harnessConfigPath) {
+  const existingHarness = readJsonLike(harnessConfigPath);
+  const host = existingHarness.figma_console?.ssh_host;
+  return host?.trim() || undefined;
+}
+async function promptForFigmaAccessToken(existing) {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     return existing;
   }
@@ -14795,7 +14804,27 @@ async function promptForFigmaApiKey(existing) {
     rl.close();
   }
 }
-function writeHarnessConfig(filePath, jinaApiKey, figmaApiKey) {
+async function promptForFigmaConsoleSshHost(existing) {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return existing;
+  }
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const suffix = existing ? ` (press Enter to reuse "${existing}", type "local" for local mode)` : " (leave empty for local mode)";
+    const answer = await new Promise((resolveQuestion, rejectQuestion) => {
+      rl.question(`Enter SSH host for Figma Console MCP (e.g. user@host)${suffix}: `, (value) => resolveQuestion(value));
+      rl.once("error", rejectQuestion);
+    });
+    const trimmed = answer.trim();
+    if (trimmed.toLowerCase() === "local") {
+      return;
+    }
+    return trimmed || existing;
+  } finally {
+    rl.close();
+  }
+}
+function writeHarnessConfig(filePath, jinaApiKey, figmaAccessToken, figmaConsoleSshHost) {
   const current = existsSync(filePath) ? readJsonLike(filePath) : {};
   const next = parse2(SAMPLE_PROJECT_CONFIG);
   const merged = {
@@ -14821,30 +14850,45 @@ function writeHarnessConfig(filePath, jinaApiKey, figmaApiKey) {
   if (jinaApiKey) {
     merged.credentials.jina_api_key = jinaApiKey;
   }
-  if (figmaApiKey) {
-    merged.credentials.figma_api_key = figmaApiKey;
+  if (figmaAccessToken) {
+    merged.credentials.figma_access_token = figmaAccessToken;
   }
+  delete merged.credentials.figma_api_key;
+  if (figmaConsoleSshHost) {
+    merged.figma_console = { ssh_host: figmaConsoleSshHost };
+  } else if (!merged.figma_console) {
+    merged.figma_console = {};
+  }
+  delete merged.mcps.fff;
   writeJson(filePath, merged);
 }
-var DEFAULT_DCP_CONFIG = {
-  $schema: "https://raw.githubusercontent.com/Opencode-DCP/opencode-dynamic-context-pruning/master/dcp.schema.json",
-  compress: {
-    nudgeFrequency: 10,
-    iterationNudgeThreshold: 25,
-    nudgeForce: "soft"
+var DEFAULT_NOTIFIER_CONFIG = {
+  sound: true,
+  notification: true,
+  timeout: 3,
+  suppressWhenFocused: false,
+  sounds: {
+    permission: "/usr/share/sounds/freedesktop/stereo/message.oga",
+    complete: "/usr/share/sounds/freedesktop/stereo/message.oga",
+    subagent_complete: "/usr/share/sounds/freedesktop/stereo/message.oga",
+    error: "/usr/share/sounds/freedesktop/stereo/message.oga",
+    question: "/usr/share/sounds/freedesktop/stereo/message.oga",
+    user_cancelled: "/usr/share/sounds/freedesktop/stereo/message.oga"
+  },
+  volumes: {
+    permission: 0.35,
+    complete: 0.35,
+    subagent_complete: 0.25,
+    error: 0.45,
+    question: 0.35,
+    user_cancelled: 0.2
   }
 };
-function writeDcpConfig(filePath) {
-  const current = existsSync(filePath) ? readJsonLike(filePath) : {};
-  const merged = {
-    ...DEFAULT_DCP_CONFIG,
-    ...current,
-    compress: {
-      ...DEFAULT_DCP_CONFIG.compress ?? {},
-      ...current.compress ?? {}
-    }
-  };
-  writeJson(filePath, merged);
+function writeNotifierConfig(filePath) {
+  if (existsSync(filePath)) {
+    return;
+  }
+  writeJson(filePath, DEFAULT_NOTIFIER_CONFIG);
 }
 async function fetchText(url2) {
   const response = await fetch(url2);
@@ -14852,62 +14896,6 @@ async function fetchText(url2) {
     throw new Error(`Failed to fetch ${url2}: ${response.status}`);
   }
   return await response.text();
-}
-async function fetchJson(url2) {
-  const response = await fetch(url2, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      ...process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}
-    }
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to fetch ${url2}: ${response.status}`);
-  }
-  return await response.json();
-}
-function resolveFffReleaseTarget() {
-  if (process.platform === "linux" && process.arch === "x64") {
-    return "x86_64-unknown-linux-musl";
-  }
-  if (process.platform === "linux" && process.arch === "arm64") {
-    return "aarch64-unknown-linux-musl";
-  }
-  if (process.platform === "darwin" && process.arch === "x64") {
-    return "x86_64-apple-darwin";
-  }
-  if (process.platform === "darwin" && process.arch === "arm64") {
-    return "aarch64-apple-darwin";
-  }
-  if (process.platform === "win32" && process.arch === "x64") {
-    return "x86_64-pc-windows-msvc.exe";
-  }
-  if (process.platform === "win32" && process.arch === "arm64") {
-    return "aarch64-pc-windows-msvc.exe";
-  }
-  return;
-}
-async function installFffMcp(binDir) {
-  const target = resolveFffReleaseTarget();
-  if (!target) {
-    console.warn(`[opencode-pair-autonomy] Skipping fff-mcp install: unsupported platform ${process.platform}/${process.arch}`);
-    return;
-  }
-  const release = await fetchJson("https://api.github.com/repos/dmtrKovalenko/fff.nvim/releases/latest");
-  const expectedName = process.platform === "win32" ? `fff-mcp-${target}` : `fff-mcp-${target}`;
-  const asset = release.assets?.find((entry) => entry.name === expectedName && typeof entry.browser_download_url === "string");
-  if (!asset?.browser_download_url) {
-    throw new Error(`Could not find a matching fff-mcp release asset for target ${target}`);
-  }
-  const response = await fetch(asset.browser_download_url);
-  if (!response.ok) {
-    throw new Error(`Failed to download ${asset.browser_download_url}: ${response.status}`);
-  }
-  const outputPath = join(binDir, process.platform === "win32" ? "fff-mcp.exe" : "fff-mcp");
-  ensureDir(binDir);
-  writeFileSync(outputPath, Buffer.from(await response.arrayBuffer()));
-  if (process.platform !== "win32") {
-    chmodSync(outputPath, 493);
-  }
 }
 async function installBackgroundAgentsVendor(vendorDir) {
   ensureDir(join(vendorDir, "kdco-primitives"));
@@ -15017,33 +15005,6 @@ function installBundledSkills(skillsDir) {
   ensureDir(skillsDir);
   copyDirectoryContents(sourceRoot, skillsDir);
 }
-function readExistingJinaApiKey(harnessConfigPath) {
-  const existingHarness = readJsonLike(harnessConfigPath);
-  const harnessKey = normalizeJinaApiKey(existingHarness.credentials?.jina_api_key);
-  if (harnessKey) {
-    return harnessKey;
-  }
-  const currentConfig = readJsonLike(detectMainConfigPath(getConfigPaths(getConfigDir())).path);
-  const bearer = currentConfig.mcp?.jina?.headers;
-  return normalizeJinaApiKey(bearer?.Authorization);
-}
-async function promptForJinaApiKey(existing) {
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    return existing;
-  }
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    const suffix = existing ? " (press Enter to reuse existing value)" : "";
-    const answer = await new Promise((resolveQuestion, rejectQuestion) => {
-      rl.question(`Enter Jina API key${suffix}: `, (value) => resolveQuestion(value));
-      rl.once("error", rejectQuestion);
-    });
-    const normalized = normalizeJinaApiKey(answer);
-    return normalized ?? existing;
-  } finally {
-    rl.close();
-  }
-}
 function updateConfig(paths) {
   const detected = detectMainConfigPath(paths);
   const config2 = readJsonLike(detected.path);
@@ -15051,7 +15012,7 @@ function updateConfig(paths) {
   config2.$schema = config2.$schema ?? "https://opencode.ai/config.json";
   config2.plugin = mergePluginList(config2.plugin, paths.vendorDir);
   config2.instructions = mergeInstructionsList(config2.instructions, paths.shellStrategyDir);
-  config2.default_agent = "ryo";
+  config2.default_agent = "yang";
   forceAllowPermissions(config2);
   writeJson(detected.path, config2);
   return detected.path;
@@ -15146,20 +15107,16 @@ async function installHarness(options) {
   ensureTuiConfig(configDir);
   ensureSkillsDir(paths.skillsDir);
   const jinaApiKey = await promptForJinaApiKey(readExistingJinaApiKey(paths.harnessConfig));
-  const figmaApiKey = await promptForFigmaApiKey(readExistingFigmaApiKey(paths.harnessConfig));
+  const figmaAccessToken = await promptForFigmaAccessToken(readExistingFigmaAccessToken(paths.harnessConfig));
+  const figmaConsoleSshHost = await promptForFigmaConsoleSshHost(readExistingFigmaConsoleSshHost(paths.harnessConfig));
   await installShellStrategyInstruction(paths.shellStrategyDir);
   await installBackgroundAgentsVendor(paths.vendorDir);
-  try {
-    await installFffMcp(paths.binDir);
-  } catch (error48) {
-    console.warn(`[opencode-pair-autonomy] Failed to install fff-mcp automatically: ${error48 instanceof Error ? error48.message : String(error48)}`);
-  }
   installSelfContainedMcps(paths.vendorMcpDir, { fresh: options?.fresh });
   installBundledSkills(paths.skillsDir);
   const configPath = updateConfig(paths);
   const packageJsonPath = updatePackageJson(paths);
-  writeHarnessConfig(paths.harnessConfig, jinaApiKey, figmaApiKey);
-  writeDcpConfig(paths.dcpConfig);
+  writeHarnessConfig(paths.harnessConfig, jinaApiKey, figmaAccessToken, figmaConsoleSshHost);
+  writeNotifierConfig(paths.notifierConfig);
   await runBunInstall(configDir);
   await ensureInstalledHarnessBuild(configDir);
   try {
@@ -15256,7 +15213,6 @@ function printConfig() {
   console.log(`{
   "plugin": [
     "file://<project-root>",
-    "@tarquinen/opencode-dcp@latest",
     "@zenobius/opencode-skillful@latest",
     "@franlol/opencode-md-table-formatter@latest",
     "opencode-pty@latest",
@@ -15266,7 +15222,7 @@ function printConfig() {
   "instructions": [
     "~/.config/opencode/plugin/shell-strategy/shell_strategy.md"
   ],
-  "default_agent": "ryo"
+  "default_agent": "yang"
 }
 
 Use \`opencode-pair-autonomy install\` for the real path-aware install.`);

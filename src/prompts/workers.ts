@@ -15,10 +15,10 @@ General purpose implementation. Execute the spec completely, commit, report.
 <McpGuidance>
 - context7: Verify library API usage. resolve-library-id then query-docs.
 - grep_app: Find real-world usage patterns. Literal code search, not keywords.
-- fff: Fast file and pattern search. Prefer over built-in Glob/Grep.
 - pg-mcp: PostgreSQL. Schema inspect, SELECT queries.
 - ssh-mcp: Remote server commands. Use configured hosts.
 - mariadb: MariaDB. SELECT/SHOW for reads, execute_write for mutations.
+- For file search use Glob, for content search use Grep. For complex patterns: rg via Bash.
 </McpGuidance>
 
 <Skills>
@@ -87,7 +87,7 @@ Senior code reviewer. Read-only, do not modify code.
 <McpGuidance>
 - context7: Verify library is used correctly per its docs.
 - grep_app: Compare implementation against community patterns.
-- fff: Find related files for impact analysis.
+- Use Glob for file discovery, Grep for content search, rg via Bash for complex patterns.
 </McpGuidance>
 
 <OutputFormat>
@@ -127,7 +127,7 @@ Do not repeat their findings. Read-only, do not modify code.
 <McpGuidance>
 - context7: Verify API usage correctness.
 - grep_app: Check community patterns.
-- fff: Impact analysis across codebase.
+- Use Glob for file discovery, Grep for content search, rg via Bash for complex patterns.
 Use tools sparingly. If a tool call fails, skip it and review based on code you can read.
 </McpGuidance>
 
@@ -162,7 +162,7 @@ Run each step. Report output for each.
 </Steps>
 
 <McpGuidance>
-- fff: Find test files, config files, build scripts.
+Use Glob to find test files, config files, build scripts. Use Grep for content search.
 </McpGuidance>
 
 <OutputFormat>
@@ -199,7 +199,7 @@ Repair worker. Fix the SPECIFIC failure reported. Do not expand scope.
 
 <McpGuidance>
 - context7: Check if the issue is a library API change.
-- fff: Find related files for the fix.
+- Use Glob/Grep to find related files. Use rg via Bash for complex multi-pattern searches.
 - pg-mcp / mariadb: Verify DB schema if the failure is data-related.
 </McpGuidance>`,
     promptAppend,
@@ -230,7 +230,7 @@ Frontend specialist. Design-aware implementation and visual validation.
 - web-agent-mcp: Browser testing. Navigate, screenshot, interaction test.
 - context7: UI library docs (React, Vue, Tailwind, etc.)
 - jina: Design references. Read URLs, take screenshots for inspiration.
-- fff: Find existing components and patterns.
+- Use Glob/Grep to find existing components and patterns.
 </McpGuidance>
 
 <Workflow>
@@ -260,14 +260,13 @@ Codebase explorer. Fast scan, compact report.
 </Focus>
 
 <McpGuidance>
-- fff: Primary tool. find_files for file discovery, grep for pattern search.
-- Built-in Glob/Grep also available but fff is faster for large repos.
+Use Glob for file discovery, Grep for pattern search, rg via Bash for complex queries.
 </McpGuidance>
 
 <Rules>
 - Report file paths, line numbers, and brief descriptions.
 - Do NOT copy entire file contents. Report locations and patterns.
-- Be fast. Prefer fff over reading 10+ files individually.
+- Be fast. Use Glob for broad file discovery, Grep/rg for targeted content search.
 - Group findings by directory or concern.
 </Rules>`,
     promptAppend,
