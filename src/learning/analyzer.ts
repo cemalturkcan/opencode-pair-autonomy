@@ -1,4 +1,3 @@
-import { getAllSignals, matchesAnySignal } from "../i18n";
 import type { PersistedSessionSummary, Observation } from "../hooks/runtime";
 import { getProjectFactLabel, type ProjectFacts } from "../project-facts";
 import type {
@@ -6,6 +5,30 @@ import type {
   LearningEvidence,
   LearnedPattern,
 } from "./types";
+
+const PREFERENCE_SIGNALS: Record<string, string[]> = {
+  "user:no-routine-permission-asks": [
+    "do not ask permission", "dont ask permission", "stop asking permission",
+    "dont keep asking", "no permission questions",
+  ],
+  "user:explain-disagreement-explicitly": [
+    "explain why", "if you disagree", "make disagreement explicit",
+    "say why you disagree", "explain the tradeoff",
+  ],
+  "user:subagents-are-exceptional": [
+    "rarely call subagents", "subagents should be rare", "only for large tasks",
+    "large output tasks", "async work", "use subagents sparingly",
+  ],
+  "user:implement-in-phases": [
+    "phase by phase", "step by step", "implement in phases",
+    "do it in phases", "one step at a time",
+  ],
+};
+
+function matchesAnyPhrase(text: string, phrases: string[]): boolean {
+  const normalized = text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return phrases.some((phrase) => normalized.includes(phrase.toLowerCase()));
+}
 
 const USER_PREFERENCE_RULES: Array<{ id: string; baseConfidence: number }> = [
   {
@@ -58,7 +81,7 @@ function collectUserPreferenceCandidates(
   }
 
   return USER_PREFERENCE_RULES.filter((rule) =>
-    matchesAnySignal(source, getAllSignals("preferences", rule.id)),
+    matchesAnyPhrase(source, PREFERENCE_SIGNALS[rule.id] ?? []),
   ).map((rule) => ({
     id: rule.id,
     kind: "user_preference" as const,
@@ -291,7 +314,7 @@ function renderEvidence(evidence: LearningEvidence): string {
   }
 }
 
-export function renderPatternKind(kind: LearnedPattern["kind"]): string {
+function renderPatternKind(kind: LearnedPattern["kind"]): string {
   return kind.replace(/_/g, " ");
 }
 

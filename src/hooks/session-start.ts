@@ -1,11 +1,18 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { PluginInput } from "@opencode-ai/plugin";
-import { detectLocaleFromTexts, extractTextParts } from "../i18n";
 import { joinProjectFactLabels } from "../project-facts";
 import type { HarnessConfig } from "../types";
 import type { HookRuntime } from "./runtime";
 import { PRIMARY_AGENTS, resolveSessionOrEntityID } from "./runtime";
+
+function extractTextParts(parts: Array<{ type?: string; text?: string }>): string {
+  return parts
+    .filter((part) => part.type === "text" && typeof part.text === "string")
+    .map((part) => part.text ?? "")
+    .join("\n")
+    .trim();
+}
 
 type ChatMessageInput = {
   sessionID: string;
@@ -75,10 +82,6 @@ export function createSessionStartHook(
           ? output.message.agent
           : undefined);
       runtime.setSessionAgent(input.sessionID, agentName);
-      const locale = detectLocaleFromTexts(
-        extractTextParts(output.parts ?? []),
-      );
-      runtime.setSessionLocale(input.sessionID, locale);
 
       // Detect mode transitions via unique harness markers embedded in command templates.
       // Markers are collision-resistant — normal conversation cannot trigger them.
@@ -138,7 +141,6 @@ export function createSessionStartHook(
       ) {
         const sessionContext = runtime.consumePendingInjection(
           input.sessionID,
-          locale,
         );
         if (sessionContext) {
           injectionParts.push(sessionContext);

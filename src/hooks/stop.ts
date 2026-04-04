@@ -1,8 +1,15 @@
 import type { PluginInput } from "@opencode-ai/plugin";
-import { detectLocaleFromTexts, extractTextParts } from "../i18n";
 import type { HookRuntime } from "./runtime";
 import { unwrapData } from "./sdk";
 import { resolveSessionOrEntityID } from "./runtime";
+
+function extractTextParts(parts: Array<{ type?: string; text?: string }>): string {
+  return parts
+    .filter((part) => part.type === "text" && typeof part.text === "string")
+    .map((part) => part.text ?? "")
+    .join("\n")
+    .trim();
+}
 
 type Todo = {
   content?: string;
@@ -62,15 +69,9 @@ export function createStopHook(ctx: PluginInput, runtime: HookRuntime) {
         .filter(Boolean);
 
       const facts = runtime.detectProjectFacts();
-      const locale = detectLocaleFromTexts(
-        extractText(lastUser),
-        extractText(lastAssistant),
-      );
-      runtime.setSessionLocale(sessionID, locale);
       const summary = {
         sessionID,
         savedAt: new Date().toISOString(),
-        locale,
         packageManager: facts.packageManager,
         languages: facts.languages,
         frameworks: facts.frameworks,

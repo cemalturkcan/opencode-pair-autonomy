@@ -1,31 +1,4 @@
-export type HarnessMode = "coordinator";
-
-export type PlanModeState = "planning" | "executing";
-
-export type WorkerType =
-  | "thorfinn"
-  | "ginko"
-  | "kaiki"
-  | "odokawa"
-  | "ozen"
-  | "skull-knight"
-  | "paprika"
-  | "rajdhani";
-
 export type HookProfile = "minimal" | "standard" | "strict";
-
-export type WslState = {
-  enabled: boolean;
-  winDrive: string;
-  winProjectPath: string;
-};
-
-export type ResourceMap = {
-  sshHosts: string[];
-  dbConnections: { mariadb: string[]; postgres: string[] };
-  projectDocs: string[];
-  skills: string[];
-};
 
 export type McpToggles = {
   context7?: boolean;
@@ -34,7 +7,6 @@ export type McpToggles = {
   web_agent_mcp?: boolean;
   pg_mcp?: boolean;
   ssh_mcp?: boolean;
-  sudo_mcp?: boolean;
   jina?: boolean;
   figma_console?: boolean;
   mariadb?: boolean;
@@ -52,7 +24,7 @@ export type AgentOverride = {
 };
 
 export type HarnessConfig = {
-  default_mode?: HarnessMode;
+  default_mode?: "coordinator";
   set_default_agent?: boolean;
   commands?: {
     enabled?: boolean;

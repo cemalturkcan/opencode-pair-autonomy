@@ -9,7 +9,6 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import type { PluginInput } from "@opencode-ai/plugin";
-import { detectLocaleFromTexts, type SupportedLocale } from "../i18n";
 import type { HarnessConfig, HookProfile } from "../types";
 import { ensureDir, readJson, readText, writeJson } from "../utils";
 import {
@@ -31,7 +30,6 @@ import {
 export type PersistedSessionSummary = {
   sessionID: string;
   savedAt: string;
-  locale?: SupportedLocale;
   packageManager: string;
   languages: string[];
   frameworks: string[];
@@ -267,7 +265,6 @@ export function createHookRuntime(ctx: PluginInput, config: HarnessConfig) {
   const planModesPath = join(projectRoot, "plan-modes.json");
   const pendingInjection = new Map<string, PendingInjection>();
   const sessionAgents = new Map<string, string>();
-  const sessionLocales = new Map<string, SupportedLocale>();
   const editedFiles = new Map<string, Set<string>>();
   const toolCounts = new Map<string, number>();
   const compactHints = new Map<string, number>();
@@ -306,7 +303,6 @@ export function createHookRuntime(ctx: PluginInput, config: HarnessConfig) {
   const sessionMaps = [
     pendingInjection,
     sessionAgents,
-    sessionLocales,
     editedFiles,
     toolCounts,
     compactHints,
@@ -350,37 +346,6 @@ export function createHookRuntime(ctx: PluginInput, config: HarnessConfig) {
 
   function getSessionAgent(sessionID: string): string | undefined {
     return sessionAgents.get(sessionID);
-  }
-
-  function setSessionLocale(
-    sessionID: string,
-    locale: SupportedLocale | undefined,
-  ): void {
-    if (!locale) {
-      return;
-    }
-    sessionLocales.set(sessionID, locale);
-  }
-
-  function getSessionLocale(sessionID: string): SupportedLocale | undefined {
-    return sessionLocales.get(sessionID);
-  }
-
-  function resolveLocale(
-    sessionID?: string,
-    ...texts: Array<string | undefined>
-  ): SupportedLocale {
-    if (sessionID && sessionLocales.has(sessionID)) {
-      return sessionLocales.get(sessionID) ?? "en";
-    }
-
-    const latest = loadLatestSummary();
-    return detectLocaleFromTexts(
-      ...texts,
-      latest?.locale,
-      latest?.lastUserMessage,
-      latest?.lastAssistantMessage,
-    );
   }
 
   function rememberEditedFile(sessionID: string, filePath: string): void {
@@ -452,7 +417,6 @@ export function createHookRuntime(ctx: PluginInput, config: HarnessConfig) {
 
   function consumePendingInjection(
     sessionID: string,
-    locale?: SupportedLocale,
   ): string | undefined {
     const entry = pendingInjection.get(sessionID);
     if (!entry || entry.injected) {
@@ -593,7 +557,6 @@ export function createHookRuntime(ctx: PluginInput, config: HarnessConfig) {
   function clearSession(sessionID: string): void {
     pendingInjection.delete(sessionID);
     sessionAgents.delete(sessionID);
-    sessionLocales.delete(sessionID);
     editedFiles.delete(sessionID);
     toolCounts.delete(sessionID);
     compactHints.delete(sessionID);
@@ -700,9 +663,6 @@ export function createHookRuntime(ctx: PluginInput, config: HarnessConfig) {
     promoteLearning,
     setSessionAgent,
     getSessionAgent,
-    setSessionLocale,
-    getSessionLocale,
-    resolveLocale,
     rememberEditedFile,
     getEditedFiles,
     incrementToolCount,

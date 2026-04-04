@@ -64,7 +64,6 @@ const HarnessConfigSchema = z.object({
       web_agent_mcp: z.boolean().optional(),
       pg_mcp: z.boolean().optional(),
       ssh_mcp: z.boolean().optional(),
-      sudo_mcp: z.boolean().optional(),
       jina: z.boolean().optional(),
       figma_console: z.boolean().optional(),
       mariadb: z.boolean().optional(),
@@ -119,7 +118,6 @@ const DEFAULTS: HarnessConfig = {
     web_agent_mcp: true,
     pg_mcp: true,
     ssh_mcp: true,
-    sudo_mcp: false,
     jina: true,
     figma_console: true,
     mariadb: true,
@@ -273,7 +271,6 @@ export const SAMPLE_PROJECT_CONFIG = `{
     "web_agent_mcp": true,
     "pg_mcp": true,
     "ssh_mcp": true,
-    "sudo_mcp": false,
     "jina": true,
     "figma_console": true,
     "mariadb": true

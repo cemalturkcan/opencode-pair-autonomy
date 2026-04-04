@@ -14401,7 +14401,6 @@ var HarnessConfigSchema = exports_external.object({
     web_agent_mcp: exports_external.boolean().optional(),
     pg_mcp: exports_external.boolean().optional(),
     ssh_mcp: exports_external.boolean().optional(),
-    sudo_mcp: exports_external.boolean().optional(),
     jina: exports_external.boolean().optional(),
     figma_console: exports_external.boolean().optional(),
     mariadb: exports_external.boolean().optional()
@@ -14465,7 +14464,6 @@ var SAMPLE_PROJECT_CONFIG = `{
     "web_agent_mcp": true,
     "pg_mcp": true,
     "ssh_mcp": true,
-    "sudo_mcp": false,
     "jina": true,
     "figma_console": true,
     "mariadb": true

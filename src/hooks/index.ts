@@ -185,8 +185,6 @@ export async function createHarnessHooks(
     }
   };
 
-  // intent-gate removed: coordinator architecture doesn't need intent classification
-  // todo-continuation removed: coordinator handles execution flow directly
   registerHook("comment_guard", config.hooks?.comment_guard !== false, () =>
     createCommentGuardHook(),
   );
